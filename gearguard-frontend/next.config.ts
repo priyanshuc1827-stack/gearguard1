@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Keep Turbopack scoped to this app when the repository has other lockfiles.
+  turbopack: {
+    root: process.cwd(),
+  },
 };
 
 export default nextConfig;

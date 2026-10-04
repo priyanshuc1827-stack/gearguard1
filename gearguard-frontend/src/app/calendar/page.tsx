@@ -40,12 +40,22 @@ export default function CalendarPage() {
   // --- LOGIC: Fetch and Filter ---
   const { data: requests = [] } = useQuery({
     queryKey: ["requests"],
-    queryFn: () => fetch(`${API_BASE}/maintenance/requests`).then((res) => res.json()),
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/maintenance/requests`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
   });
 
   const { data: assets = [] } = useQuery({
     queryKey: ["equipment"],
-    queryFn: () => fetch(`${API_BASE}/equipment`).then((res) => res.json()),
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/equipment`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
   });
 
   const preventiveTasks = Array.isArray(requests) 
@@ -231,7 +241,7 @@ function ScheduleModal({ open, onOpenChange, selectedDate, assets, onSuccess }: 
                 required
               >
                 <option value="">-- Choose Asset --</option>
-                {assets.map((a: any) => (
+                {(Array.isArray(assets) ? assets : []).map((a: any) => (
                   <option key={a.id} value={a.id}>
                     {a.name} ({a.serialNumber})
                   </option>

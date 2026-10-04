@@ -1,0 +1,3 @@
+MongoDB connected to database: gearguard
+Database already has seeded requests. Skipping seed.
+INFO:     127.0.0.1:64480 - "GET / HTTP/1.1" 200 OK

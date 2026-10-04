@@ -22,7 +22,12 @@ export default function UsersPage() {
 
   const { data: usersList = [], isLoading } = useQuery({
     queryKey: ["users-list"],
-    queryFn: () => fetch(`${API_BASE}/users`).then(res => res.json())
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/users`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
   });
 
   const createUser = useMutation({
@@ -34,7 +39,8 @@ export default function UsersPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || "Failed to create user");
+        // FastAPI returns errors as { "detail": "..." }
+        throw new Error(err.detail || err.error || "Failed to create user");
       }
       return res.json();
     },
@@ -50,11 +56,16 @@ export default function UsersPage() {
       const res = await fetch(`${API_BASE}/users/${id}?adminUserId=${adminUser?.id}`, {
         method: "DELETE"
       });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || err.error || "Failed to delete user");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-list"] });
-    }
+    },
+    onError: (err: any) => alert(err.message)
   });
 
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -128,7 +139,7 @@ export default function UsersPage() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {usersList.map((item: any) => (
+        {(Array.isArray(usersList) ? usersList : []).map((item: any) => (
           <Card key={item.id} className="hover:shadow-md transition-all border-slate-200 bg-white overflow-hidden text-left flex flex-col justify-between">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div className="space-y-1">

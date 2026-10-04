@@ -23,16 +23,24 @@ export default function MyRequestsPage() {
 
   const { data: myRequests = [], isLoading } = useQuery({
     queryKey: ["my-requests", currentUser?.id],
-    queryFn: () => {
+    queryFn: async () => {
       if (!currentUser?.id) return [];
-      return fetch(`${API_BASE}/asset-requests/my-requests?employeeId=${currentUser.id}`).then(res => res.json());
+      const res = await fetch(`${API_BASE}/asset-requests/my-requests?employeeId=${currentUser.id}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!currentUser?.id
   });
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
-    queryFn: () => fetch(`${API_BASE}/categories`).then(res => res.json())
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/categories`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
   });
 
   const submitRequest = useMutation({
@@ -112,7 +120,7 @@ export default function MyRequestsPage() {
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Category</label>
                 <select name="category" className="w-full p-2.5 border border-slate-200 rounded-md text-sm bg-white" required>
                   <option value="">-- Choose Category --</option>
-                  {categories.map((c: any) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  {(Array.isArray(categories) ? categories : []).map((c: any) => <option key={c.id} value={c.name}>{c.name}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -128,7 +136,7 @@ export default function MyRequestsPage() {
       </header>
 
       <div className="space-y-4 text-left">
-        {myRequests.length > 0 ? (
+        {Array.isArray(myRequests) && myRequests.length > 0 ? (
           myRequests.map((req: any) => (
             <Card key={req.id} className="border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-all">
               <CardContent className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

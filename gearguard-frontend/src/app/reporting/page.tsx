@@ -3,312 +3,502 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Clock, Activity, Users, CheckCircle2, ClipboardCheck, Sparkles, CheckSquare, Send, Download } from "lucide-react";
+import {
+  AlertTriangle, Clock, Activity, Users, CheckCircle2,
+  ClipboardCheck, CheckSquare, Send, Download, TrendingUp,
+  ShieldCheck, Zap, BarChart3, UserCheck, PackageOpen, XCircle
+} from "lucide-react";
+import { toast } from "sonner";
+import PageHeader from "@/components/custom/page-header";
+
+// ─── Reusable dark stat card ──────────────────────────────────────────────────
+function StatCard({
+  icon, label, value, sub, accent = "#10b981", large = false
+}: {
+  icon: React.ReactNode; label: string; value: string | number;
+  sub?: string; accent?: string; large?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-2xl p-5 space-y-3 text-left"
+      style={{
+        background: "rgba(19,25,41,0.9)",
+        border: `1px solid rgba(148,163,184,0.08)`,
+        borderLeft: `3px solid ${accent}`,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <span style={{ color: accent }}>{icon}</span>
+        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#475569' }}>{label}</span>
+      </div>
+      <p className={`font-extrabold tracking-tight leading-none ${large ? "text-4xl" : "text-3xl"}`} style={{ color: '#e8eaf2' }}>
+        {value}
+      </p>
+      {sub && <p className="text-xs font-medium" style={{ color: '#64748b' }}>{sub}</p>}
+    </div>
+  );
+}
+
+// ─── Progress bar ─────────────────────────────────────────────────────────────
+function ProgressBar({ value, max, accent }: { value: number; max: number; accent: string }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  return (
+    <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'rgba(30,40,64,0.8)' }}>
+      <div
+        className="h-full rounded-full transition-all duration-700"
+        style={{ width: `${pct}%`, background: accent }}
+      />
+    </div>
+  );
+}
 
 export default function ReportingPage() {
-  const [checklist, setChecklist] = useState({
-    users: false,
-    assets: false,
-    logs: false
-  });
+  const [checklist, setChecklist] = useState({ users: false, assets: false, logs: false, risks: false });
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("user");
     if (stored) setCurrentUser(JSON.parse(stored));
   }, []);
 
-  const allChecked = checklist.users && checklist.assets && checklist.logs;
+  const allChecked = Object.values(checklist).every(Boolean);
 
-  // 1. Fetch Machine-Specific Risks
+  // ── Data fetching ──────────────────────────────────────────────────────────
+  const { data: summary = {} } = useQuery({
+    queryKey: ["reports-summary"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/reports/summary`);
+      if (!res.ok) return {};
+      return res.json();
+    }
+  });
+
   const { data: highRisk = [] } = useQuery({
     queryKey: ["reports-high-risk"],
-    queryFn: () => fetch(`${API_BASE}/reports/high-risk`).then(res => res.json())
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/reports/high-risk`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
   });
 
-  // 2. Fetch Team Efficiency Stats
-  const { data: teamStats = [], isLoading } = useQuery({
-    queryKey: ["team-performance"],
-    queryFn: () => fetch(`${API_BASE}/reports/team-performance`).then(res => res.json())
+  const { data: techPerf = [], isLoading } = useQuery({
+    queryKey: ["technician-performance"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/reports/technician-performance`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
   });
 
+  // ── Actions ────────────────────────────────────────────────────────────────
   const submitAuditReport = async () => {
     if (!allChecked) return;
-    if (!currentUser?.id) return alert("You must be logged in to publish an audit report.");
-
+    if (!currentUser?.id) { toast.error("You must be logged in."); return; }
+    setSubmitting(true);
     try {
-      const response = await fetch(`${API_BASE}/audit-logs`, {
+      const res = await fetch(`${API_BASE}/audit-logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: currentUser.id,
           action: "Safety Audit",
-          details: "Compliance audit successfully completed. Operators verified, assets validated, and system ledger reviews complete. MARKED COMPLIANT."
+          details: `Compliance audit completed by ${currentUser.name}. Operators verified, assets validated, system ledger reviewed. MARKED COMPLIANT.`
         })
       });
-
-      if (response.ok) {
-        alert("Compliance Audit Report successfully published and registered in the system ledger!");
-        setChecklist({ users: false, assets: false, logs: false });
+      if (res.ok) {
+        toast.success("Audit report published to system ledger ✓");
+        setChecklist({ users: false, assets: false, logs: false, risks: false });
       } else {
-        alert("Failed to register compliance report in ledger.");
+        toast.error("Failed to publish audit report.");
       }
-    } catch (err) {
-      console.error(err);
-      alert("Error sending request to backend.");
+    } catch {
+      toast.error("Network error — backend unreachable.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const exportRiskCSV = () => {
-    if (highRisk.length === 0) return alert("No risk records to export!");
-
-    const headers = ["Asset Name", "Serial Number", "Total Failures", "Total Downtime (hrs)", "Oversight Level"];
-    const rows = highRisk.map((machine: any) => [
-      machine.name,
-      machine.serialNumber,
-      machine.totalRequests,
-      machine.totalDuration || 0,
-      machine.totalRequests > 3 ? "CRITICAL RISK" : "MONITORING"
+    if ((highRisk as any[]).length === 0) { toast.warning("No risk records to export."); return; }
+    const headers = ["Asset Name", "Serial Number", "Total Failures", "Total Downtime (hrs)", "Risk Level"];
+    const rows = (highRisk as any[]).map((m: any) => [
+      m.name, m.serialNumber, m.totalRequests,
+      m.totalDuration || 0,
+      m.totalRequests > 3 ? "CRITICAL RISK" : "MONITORING"
     ]);
-
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `gearguard_high_risk_assets_${new Date().toISOString().split("T")[0]}.csv`);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `gearguard_risk_report_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Risk report exported as CSV");
   };
 
-  if (isLoading) return <div className="p-10 text-center font-medium">Analyzing live data...</div>;
+  const exportFullCSV = () => {
+    if ((techPerf as any[]).length === 0) { toast.warning("No technician data to export."); return; }
+    const headers = ["Technician", "Email", "Assigned Tasks", "Completed", "Completion Rate (%)", "Total Downtime (hrs)"];
+    const rows = (techPerf as any[]).map((t: any) => [t.name, t.email, t.assigned, t.completed, t.rate, t.downtime]);
+    const csv = [headers, ...rows].map(r => r.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `gearguard_technician_report_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Technician performance report exported");
+  };
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center space-y-3">
+        <div className="w-10 h-10 rounded-full border-2 animate-spin mx-auto" style={{ borderColor: '#10b981', borderTopColor: 'transparent' }} />
+        <p className="text-sm font-medium" style={{ color: '#64748b' }}>Analysing facility data...</p>
+      </div>
+    </div>
+  );
+
+  const s: any = summary;
+  const checkedCount = Object.values(checklist).filter(Boolean).length;
 
   return (
-    <div className="p-8 space-y-10 bg-slate-50 min-h-screen text-left">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <ClipboardCheck size={28} className="text-blue-600" /> Compliance & Reporting
-          </h1>
-          <p className="text-sm text-slate-500">Live indicators, facility performance analysis, and auditor safety checks.</p>
-        </div>
-      </header>
-
-      {/* COMPLIANCE CHECKLIST PANEL */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
-        <Card className="border border-slate-200 shadow-sm bg-white p-6">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <CheckSquare className="text-blue-600" size={24} />
-              <h2 className="text-xl font-bold text-slate-850">Compliance Audit Checklist</h2>
-            </div>
-            <p className="text-sm text-slate-500">Perform standard compliance audits. Once all items are checked, publish the audit report to seal it in the immutable system ledger.</p>
-            
-            <div className="space-y-3 pt-2">
-              <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50/50 cursor-pointer transition-colors">
-                <input 
-                  type="checkbox" 
-                  checked={checklist.users}
-                  onChange={(e) => setChecklist({...checklist, users: e.target.checked})}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <div className="text-sm">
-                  <span className="font-semibold text-slate-800 block">Operator Verification</span>
-                  <span className="text-xs text-slate-400">Verify all system operators have valid, authorized role-based directory entries.</span>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50/50 cursor-pointer transition-colors">
-                <input 
-                  type="checkbox" 
-                  checked={checklist.assets}
-                  onChange={(e) => setChecklist({...checklist, assets: e.target.checked})}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <div className="text-sm">
-                  <span className="font-semibold text-slate-800 block">Asset Serial Integrity</span>
-                  <span className="text-xs text-slate-400">Validate high-risk asset serial numbers against physical hardware tags.</span>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50/50 cursor-pointer transition-colors">
-                <input 
-                  type="checkbox" 
-                  checked={checklist.logs}
-                  onChange={(e) => setChecklist({...checklist, logs: e.target.checked})}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <div className="text-sm">
-                  <span className="font-semibold text-slate-800 block">Ledger Review</span>
-                  <span className="text-xs text-slate-400">Inspect the immutable system audit logs for any discrepancies or unauthorized overrides.</span>
-                </div>
-              </label>
-            </div>
-
-            <Button 
-              onClick={submitAuditReport}
-              disabled={!allChecked}
-              className={`w-full py-6 font-bold uppercase transition-all duration-300 ${
-                allChecked ? "bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg" : "bg-slate-100 text-slate-400 border border-slate-200"
-              }`}
+    <div className="space-y-8 text-left">
+      <PageHeader
+        title="Compliance & Reporting"
+        subtitle="Live facility KPIs, technician performance analytics, and auditor safety checks"
+        icon={<ClipboardCheck size={20} />}
+        accentColor="#10b981"
+        actions={
+          <div className="flex gap-3">
+            <Button
+              variant="ghost"
+              className="gap-2 h-9 px-4 text-sm font-bold rounded-xl"
+              style={{ border: '1px solid rgba(148,163,184,0.15)', color: '#94a3b8' }}
+              onClick={exportRiskCSV}
             >
-              <Send size={16} className="mr-2" />
-              Publish Compliance Audit Report
+              <Download size={14} /> Risk CSV
+            </Button>
+            <Button
+              variant="ghost"
+              className="gap-2 h-9 px-4 text-sm font-bold rounded-xl"
+              style={{ border: '1px solid rgba(148,163,184,0.15)', color: '#94a3b8' }}
+              onClick={exportFullCSV}
+            >
+              <Download size={14} /> Performance CSV
             </Button>
           </div>
-        </Card>
+        }
+      />
 
-        {/* STATUS BRIEF */}
-        <Card className="border border-slate-200 shadow-sm bg-gradient-to-br from-blue-50/40 to-indigo-50/20 p-6 flex flex-col justify-between">
-          <div className="space-y-4">
-            <h3 className="text-sm font-black uppercase text-slate-400 tracking-wider">Facility Compliance Status</h3>
-            <div className="space-y-2">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                allChecked ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-              }`}>
-                <Sparkles size={12} className={allChecked ? "animate-spin" : ""} />
-                {allChecked ? "READY TO CERTIFY" : "PENDING AUDIT"}
-              </span>
-              <p className="text-3xl font-extrabold text-slate-850">
-                {allChecked ? "100% Verified" : "Audit In Progress"}
-              </p>
-            </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Upon publishing the report, a permanent compliance log event will be sealed under your User ID in the System Ledger.
-            </p>
-          </div>
-          <div className="text-slate-400 text-[10px] font-mono border-t pt-4">
-            Auditor ID: {currentUser?.id || "Not Authenticated"}
-          </div>
-        </Card>
-      </div>
-
-      {/* --- SECTION 1: TEAM PERFORMANCE ANALYTICS --- */}
-      <div className="pt-4">
-        <header className="mb-6">
-          <h2 className="text-2xl font-bold text-slate-900">Team Performance Analytics</h2>
-          <p className="text-slate-500 font-medium">Efficiency tracking: Repaired tasks vs. cumulative downtime.</p>
-        </header>
-
-        <div className="grid grid-cols-1 gap-6">
-          {teamStats.length > 0 ? (
-            teamStats.map((team: any) => (
-              <Card key={team.teamName} className="border-slate-200 shadow-sm overflow-hidden bg-white">
-                <CardHeader className="border-b flex flex-row items-center justify-between py-4">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Users className="text-blue-600" size={20} />
-                    {team.teamName || "Unassigned Team"}
-                  </CardTitle>
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100">Live Metrics</Badge>
-                </CardHeader>
-                <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs font-bold uppercase text-slate-500">
-                        <span>Tasks Repaired</span>
-                        <span className="text-blue-600 font-bold">{team.repairedCount}</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-blue-500 h-full transition-all duration-1000" 
-                          style={{ width: `${Math.min((team.repairedCount / 10) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs font-bold uppercase text-slate-500">
-                        <span>Downtime Logged</span>
-                        <span className="text-red-500 font-bold">{team.totalDowntime || 0} hrs</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-red-400 h-full transition-all duration-1000" 
-                          style={{ width: `${Math.min((team.totalDowntime / 50) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 text-center">
-                      <CheckCircle2 className="mx-auto text-green-500 mb-1" size={20} />
-                      <p className="text-2xl font-bold text-slate-800">{team.repairedCount}</p>
-                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Success Rate</p>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 text-center">
-                      <Clock className="mx-auto text-orange-500 mb-1" size={20} />
-                      <p className="text-2xl font-bold text-slate-800">{team.totalDowntime || 0}</p>
-                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Labor Hours</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          ) : (
-            <p className="text-slate-400 italic text-center py-10">No team activity data available yet.</p>
-          )}
+      {/* ── SECTION 1: KPI SUMMARY STRIP ─────────────────────────────────── */}
+      <div>
+        <h2 className="text-xs font-black uppercase tracking-widest mb-4" style={{ color: '#475569' }}>
+          Facility Overview
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 gap-4">
+          <StatCard icon={<PackageOpen size={16} />} label="Total Assets"     value={s.totalAssets    ?? "—"} sub="In inventory"           accent="#06b6d4" />
+          <StatCard icon={<Activity      size={16} />} label="Total Requests"  value={s.totalRequests  ?? "—"} sub="All time"               accent="#6366f1" />
+          <StatCard icon={<CheckCircle2  size={16} />} label="Repaired"        value={s.repaired       ?? "—"} sub={`${s.repairRate ?? 0}% success rate`} accent="#10b981" />
+          <StatCard icon={<AlertTriangle size={16} />} label="Overdue Tasks"   value={s.overdue        ?? "—"} sub="Past scheduled date"    accent="#f43f5e" />
+          <StatCard icon={<Clock         size={16} />} label="Total Downtime"  value={`${s.totalDowntime ?? 0} hrs`} sub="Logged labor hours" accent="#f59e0b" />
+          <StatCard icon={<Zap           size={16} />} label="In Progress"     value={s.inProgress     ?? "—"} sub="Active work orders"     accent="#a78bfa" />
+          <StatCard icon={<XCircle       size={16} />} label="Scrapped Assets" value={s.scrapped       ?? "—"} sub="Written off"            accent="#fb7185" />
+          <StatCard icon={<Users         size={16} />} label="Technicians"     value={s.totalTechnicians ?? "—"} sub="Active field staff"   accent="#34d399" />
         </div>
       </div>
 
-      {/* --- SECTION 2: HIGH-RISK ASSET OVERSIGHT --- */}
-      <div>
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">High-Risk Asset Oversight</h2>
-            <p className="text-slate-500 font-medium">Equipment with the highest breakdown frequency.</p>
+      {/* ── SECTION 2: COMPLIANCE CHECKLIST + STATUS ─────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+        {/* Checklist */}
+        <div
+          className="rounded-2xl p-6 space-y-5"
+          style={{ background: 'rgba(19,25,41,0.9)', border: '1px solid rgba(148,163,184,0.08)' }}
+        >
+          <div className="flex items-center gap-2">
+            <CheckSquare size={20} style={{ color: '#10b981' }} />
+            <h2 className="text-base font-bold" style={{ color: '#e8eaf2' }}>Compliance Audit Checklist</h2>
           </div>
-          <Button onClick={exportRiskCSV} variant="outline" className="border-slate-200 flex items-center gap-2 hover:bg-slate-100 font-bold self-start sm:self-auto">
-            <Download size={16} /> Export Risk Report (CSV)
-          </Button>
-        </header>
-        <div className="grid grid-cols-1 gap-4">
-          {highRisk.map((machine: any) => (
-            <Card key={machine.id} className="border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-all bg-white">
-              <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="bg-orange-100 p-3 rounded-full text-orange-600 shrink-0">
-                    <AlertTriangle size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-800">{machine.name}</h3>
-                    <p className="text-xs text-slate-400 font-mono uppercase">{machine.serialNumber}</p>
-                  </div>
-                </div>
+          <p className="text-xs leading-relaxed" style={{ color: '#64748b' }}>
+            Complete all audit steps before publishing the compliance certificate to the immutable system ledger.
+          </p>
 
-                <div className="flex flex-wrap gap-8 text-center sm:text-right md:text-center">
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Total Failures</p>
-                    <div className="flex items-center gap-2 justify-center sm:justify-end md:justify-center">
-                      <Activity size={14} className="text-blue-500" />
-                      <span className="text-xl font-bold text-slate-800">{machine.totalRequests}</span>
+          {/* Progress bar */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-xs font-bold" style={{ color: '#475569' }}>
+              <span>Audit Progress</span>
+              <span style={{ color: checkedCount === 4 ? '#10b981' : '#f59e0b' }}>{checkedCount}/4 Complete</span>
+            </div>
+            <ProgressBar value={checkedCount} max={4} accent={checkedCount === 4 ? '#10b981' : '#f59e0b'} />
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            {[
+              {
+                key: "users" as const,
+                title: "Operator Verification",
+                desc: "Verify all system operators have valid, authorized role-based directory entries."
+              },
+              {
+                key: "assets" as const,
+                title: "Asset Serial Integrity",
+                desc: "Validate high-risk asset serial numbers against physical hardware tags in the facility."
+              },
+              {
+                key: "risks" as const,
+                title: "Risk Assessment Review",
+                desc: "Inspect the top-failure assets above and confirm corrective action is documented."
+              },
+              {
+                key: "logs" as const,
+                title: "System Ledger Review",
+                desc: "Inspect audit logs for any discrepancies, unauthorized overrides, or anomalous entries."
+              },
+            ].map(({ key, title, desc }) => (
+              <label
+                key={key}
+                className="flex items-start gap-3 p-3.5 rounded-xl cursor-pointer transition-all duration-150"
+                style={{
+                  background: checklist[key] ? 'rgba(16,185,129,0.06)' : 'rgba(30,40,64,0.5)',
+                  border: `1px solid ${checklist[key] ? 'rgba(16,185,129,0.2)' : 'rgba(148,163,184,0.06)'}`,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checklist[key]}
+                  onChange={(e) => setChecklist({ ...checklist, [key]: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded accent-emerald-500 shrink-0"
+                />
+                <div>
+                  <span className="text-sm font-semibold block" style={{ color: checklist[key] ? '#10b981' : '#e8eaf2' }}>{title}</span>
+                  <span className="text-xs" style={{ color: '#475569' }}>{desc}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          <Button
+            onClick={submitAuditReport}
+            disabled={!allChecked || submitting}
+            className={`w-full h-12 font-bold rounded-xl gap-2 transition-all duration-300 ${allChecked ? "btn-glow" : ""}`}
+            style={!allChecked ? {
+              background: 'rgba(30,40,64,0.5)',
+              color: '#475569',
+              border: '1px solid rgba(148,163,184,0.08)',
+              cursor: 'not-allowed'
+            } : {}}
+          >
+            <Send size={15} />
+            {submitting ? "Publishing..." : allChecked ? "Publish Compliance Certificate" : `Complete ${4 - checkedCount} remaining step${4 - checkedCount !== 1 ? "s" : ""}`}
+          </Button>
+        </div>
+
+        {/* Audit Status Panel */}
+        <div
+          className="rounded-2xl p-6 flex flex-col justify-between"
+          style={{
+            background: 'rgba(19,25,41,0.9)',
+            border: `1px solid ${allChecked ? 'rgba(16,185,129,0.25)' : 'rgba(148,163,184,0.08)'}`,
+          }}
+        >
+          <div className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#475569' }}>
+              Facility Compliance Status
+            </h3>
+            <div className="space-y-2">
+              <span
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase"
+                style={allChecked
+                  ? { background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }
+                  : { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }
+                }
+              >
+                <ShieldCheck size={11} />
+                {allChecked ? "Ready to Certify" : "Audit In Progress"}
+              </span>
+              <p className="text-4xl font-extrabold tracking-tight" style={{ color: '#e8eaf2' }}>
+                {allChecked ? "100%" : `${Math.round((checkedCount / 4) * 100)}%`}
+              </p>
+              <p className="text-sm font-medium" style={{ color: '#64748b' }}>
+                {allChecked ? "All audit steps verified" : "Verification complete"}
+              </p>
+            </div>
+
+            {/* Repair rate callout */}
+            <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(30,40,64,0.6)', border: '1px solid rgba(148,163,184,0.06)' }}>
+              <div className="flex justify-between text-xs font-bold" style={{ color: '#475569' }}>
+                <span className="flex items-center gap-1.5"><TrendingUp size={12} style={{ color: '#10b981' }} /> Facility Repair Rate</span>
+                <span style={{ color: '#10b981' }}>{s.repairRate ?? 0}%</span>
+              </div>
+              <ProgressBar value={s.repairRate ?? 0} max={100} accent="#10b981" />
+              <p className="text-[10px]" style={{ color: '#334155' }}>
+                {s.repaired ?? 0} of {s.totalRequests ?? 0} total requests resolved
+              </p>
+            </div>
+          </div>
+
+          <div className="text-[10px] font-mono pt-4" style={{ borderTop: '1px solid rgba(148,163,184,0.06)', color: '#334155' }}>
+            <div>Auditor: <span style={{ color: '#64748b' }}>{currentUser?.name || "—"}</span></div>
+            <div>ID: <span style={{ color: '#64748b' }}>{currentUser?.id || "Not authenticated"}</span></div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── SECTION 3: TECHNICIAN PERFORMANCE ────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-widest" style={{ color: '#475569' }}>
+              Technician Performance
+            </h2>
+            <p className="text-sm mt-0.5" style={{ color: '#334155' }}>Individual breakdown — assigned, completed, and downtime logged</p>
+          </div>
+        </div>
+        {(techPerf as any[]).length === 0 ? (
+          <div className="text-center py-16 rounded-2xl" style={{ background: 'rgba(19,25,41,0.5)', border: '1px solid rgba(148,163,184,0.06)' }}>
+            <Users size={40} style={{ color: '#1e2840', margin: '0 auto 12px' }} />
+            <p className="text-sm" style={{ color: '#475569' }}>No technician data available</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {(techPerf as any[]).map((tech: any, i: number) => (
+              <div
+                key={tech.id}
+                className="rounded-2xl p-5"
+                style={{ background: 'rgba(19,25,41,0.9)', border: '1px solid rgba(148,163,184,0.08)' }}
+              >
+                <div className="flex flex-col md:flex-row md:items-center gap-5">
+                  {/* Rank + Name */}
+                  <div className="flex items-center gap-3 min-w-[180px]">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0"
+                      style={{
+                        background: i === 0 ? 'rgba(245,158,11,0.15)' : i === 1 ? 'rgba(148,163,184,0.1)' : 'rgba(30,40,64,0.8)',
+                        color: i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : '#475569',
+                        border: `1px solid ${i === 0 ? 'rgba(245,158,11,0.3)' : 'rgba(148,163,184,0.1)'}`,
+                      }}
+                    >
+                      #{i + 1}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: '#e8eaf2' }}>{tech.name}</p>
+                      <p className="text-[10px]" style={{ color: '#475569' }}>{tech.email}</p>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Total Downtime</p>
-                    <div className="flex items-center gap-2 justify-center sm:justify-end md:justify-center">
-                      <Clock size={14} className="text-red-500" />
-                      <span className="text-xl font-bold text-slate-800">{machine.totalDuration || 0} hrs</span>
-                    </div>
+
+                  {/* Stats */}
+                  <div className="flex flex-wrap gap-6 flex-1">
+                    {[
+                      { icon: <UserCheck size={13} />, label: "Assigned", value: tech.assigned, accent: '#6366f1' },
+                      { icon: <CheckCircle2 size={13} />, label: "Completed", value: tech.completed, accent: '#10b981' },
+                      { icon: <Clock size={13} />, label: "Downtime (hrs)", value: tech.downtime, accent: '#f59e0b' },
+                    ].map(({ icon, label, value, accent }) => (
+                      <div key={label} className="space-y-0.5">
+                        <p className="text-[9px] font-black uppercase flex items-center gap-1" style={{ color: '#475569' }}>
+                          <span style={{ color: accent }}>{icon}</span> {label}
+                        </p>
+                        <p className="text-xl font-extrabold" style={{ color: '#e8eaf2' }}>{value}</p>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center">
-                    <Badge className={machine.totalRequests > 3 ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-600"}>
-                      {machine.totalRequests > 3 ? "CRITICAL RISK" : "MONITORING"}
-                    </Badge>
+
+                  {/* Completion Rate */}
+                  <div className="min-w-[140px] space-y-1.5">
+                    <div className="flex justify-between text-[10px] font-bold" style={{ color: '#475569' }}>
+                      <span>Completion Rate</span>
+                      <span style={{ color: tech.rate >= 70 ? '#10b981' : tech.rate >= 40 ? '#f59e0b' : '#f43f5e' }}>
+                        {tech.rate}%
+                      </span>
+                    </div>
+                    <ProgressBar
+                      value={tech.rate}
+                      max={100}
+                      accent={tech.rate >= 70 ? '#10b981' : tech.rate >= 40 ? '#f59e0b' : '#f43f5e'}
+                    />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── SECTION 4: HIGH-RISK ASSET OVERSIGHT ─────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-widest" style={{ color: '#475569' }}>
+              High-Risk Asset Oversight
+            </h2>
+            <p className="text-sm mt-0.5" style={{ color: '#334155' }}>Top 5 assets by breakdown frequency — ranked by failure count</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {(Array.isArray(highRisk) ? highRisk : []).map((machine: any, i: number) => {
+            const isCritical = machine.totalRequests > 3;
+            return (
+              <div
+                key={machine.id}
+                className="rounded-2xl p-5"
+                style={{
+                  background: 'rgba(19,25,41,0.9)',
+                  border: `1px solid ${isCritical ? 'rgba(244,63,94,0.2)' : 'rgba(245,158,11,0.15)'}`,
+                  borderLeft: `3px solid ${isCritical ? '#f43f5e' : '#f59e0b'}`,
+                }}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="p-2.5 rounded-xl shrink-0"
+                      style={{
+                        background: isCritical ? 'rgba(244,63,94,0.1)' : 'rgba(245,158,11,0.1)',
+                        border: `1px solid ${isCritical ? 'rgba(244,63,94,0.2)' : 'rgba(245,158,11,0.2)'}`,
+                      }}
+                    >
+                      <AlertTriangle size={18} style={{ color: isCritical ? '#f43f5e' : '#f59e0b' }} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: '#e8eaf2' }}>{i + 1}. {machine.name}</p>
+                      <p className="text-[10px] font-mono uppercase" style={{ color: '#334155' }}>{machine.serialNumber}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-8 items-center">
+                    <div className="text-center">
+                      <p className="text-[9px] font-black uppercase" style={{ color: '#475569' }}>Failures</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <Activity size={13} style={{ color: '#6366f1' }} />
+                        <span className="text-lg font-extrabold" style={{ color: '#e8eaf2' }}>{machine.totalRequests}</span>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] font-black uppercase" style={{ color: '#475569' }}>Downtime</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <Clock size={13} style={{ color: '#f59e0b' }} />
+                        <span className="text-lg font-extrabold" style={{ color: '#e8eaf2' }}>{machine.totalDuration || 0} hrs</span>
+                      </div>
+                    </div>
+                    <span
+                      className="text-[9px] font-extrabold uppercase px-3 py-1 rounded-lg"
+                      style={isCritical
+                        ? { background: 'rgba(244,63,94,0.12)', color: '#f43f5e', border: '1px solid rgba(244,63,94,0.25)' }
+                        : { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }
+                      }
+                    >
+                      {isCritical ? "⚠ Critical Risk" : "Monitoring"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

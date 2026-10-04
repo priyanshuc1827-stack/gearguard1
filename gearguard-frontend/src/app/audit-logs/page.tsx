@@ -16,7 +16,12 @@ export default function AuditLogsPage() {
 
   const { data: logs = [], isLoading } = useQuery({
     queryKey: ["audit-logs"],
-    queryFn: () => fetch(`${API_BASE}/audit-logs`).then(res => res.json())
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/audit-logs`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
   });
 
   const getActionColor = (action: string) => {
@@ -44,10 +49,12 @@ export default function AuditLogsPage() {
     }
   };
 
-  // Get unique actions dynamically for dropdown
-  const uniqueActions = Array.from(new Set(logs.map((log: any) => log.action)));
+  const safeLogs = Array.isArray(logs) ? logs : [];
 
-  const filteredLogs = logs.filter((log: any) => {
+  // Get unique actions dynamically for dropdown
+  const uniqueActions = Array.from(new Set(safeLogs.map((log: any) => log.action)));
+
+  const filteredLogs = safeLogs.filter((log: any) => {
     const matchesSearch = 
       (log.details || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (log.action || "").toLowerCase().includes(searchQuery.toLowerCase()) ||

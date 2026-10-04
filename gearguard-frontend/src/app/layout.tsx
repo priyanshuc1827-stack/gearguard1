@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Providers from "./providers"; // Import your providers file
-import Sidebar from "@/components/custom/sidebar"; // Assuming you made a sidebar component
+import Providers from "./providers";
+import Sidebar from "@/components/custom/sidebar";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "GearGuard | Asset Maintenance",
-  description: "Dynamic asset tracking and maintenance management",
+  description: "Mission-critical industrial asset tracking and maintenance management",
 };
 
 export default function RootLayout({
@@ -17,14 +17,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className={inter.className}>
         <Providers>
-          <div className="flex h-screen overflow-hidden bg-slate-50">
-            {/* Sidebar remains visible on all pages */}
+          <div className="flex h-screen overflow-hidden" style={{ background: "var(--background)" }}>
+            {/* Sidebar hidden on landing + auth pages via its own logic */}
             <Sidebar />
-            
-            <main className="flex-1 overflow-y-auto pt-4 px-4">
+            {/* Main content — full width when sidebar is hidden */}
+            <main className="flex-1 overflow-y-auto">
               {children}
             </main>
           </div>

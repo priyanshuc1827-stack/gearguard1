@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+
+# Node
+node_modules/
+**/node_modules/
+
+# Environment — never commit real secrets
+.env
+.env.local
+**/.env
+**/.env.local
+
+# Build outputs
+.next/
+dist/
+build/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.suo
+*.sw?

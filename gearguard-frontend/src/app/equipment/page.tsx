@@ -2,34 +2,46 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, MapPin, User, Wrench, Search, Box, Building2, Warehouse } from "lucide-react";
-import Link from "next/link";
+import { Plus, MapPin, User, Wrench, Search, Box, Building2, Warehouse, HardDrive, UserCheck } from "lucide-react";
+import { toast } from "sonner";
+import PageHeader from "@/components/custom/page-header";
 
 export default function EquipmentPage() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [assignModal, setAssignModal] = useState<{ open: boolean; asset: any | null }>({ open: false, asset: null });
 
   useEffect(() => {
     const stored = localStorage.getItem("user");
-    if (stored) {
-      setCurrentUser(JSON.parse(stored));
-    }
+    if (stored) setCurrentUser(JSON.parse(stored));
   }, []);
 
   const { data: assets = [], isLoading } = useQuery({
     queryKey: ["equipment"],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/equipment`);
-      return res.json();
+      if (!res.ok) return [];
+      const json = await res.json();
+      return Array.isArray(json) ? json : [];
     },
   });
+
+  // Fetch technicians list
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/users`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: currentUser?.role === "admin" || currentUser?.role === "manager",
+  });
+  const technicians = Array.isArray(allUsers) ? allUsers.filter((u: any) => u.role === "technician") : [];
 
   const createAsset = useMutation({
     mutationFn: async (newAsset: any) => {
@@ -43,7 +55,27 @@ export default function EquipmentPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["equipment"] });
       setIsModalOpen(false);
+      toast.success("Asset registered successfully");
     },
+    onError: () => toast.error("Failed to register asset"),
+  });
+
+  const assignTechnician = useMutation({
+    mutationFn: async ({ assetId, technicianId }: { assetId: string; technicianId: string }) => {
+      const res = await fetch(`${API_BASE}/equipment/${assetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignedTechnicianId: technicianId }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["equipment"] });
+      setAssignModal({ open: false, asset: null });
+      toast.success("Technician assigned successfully");
+    },
+    onError: () => toast.error("Failed to assign technician"),
   });
 
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -52,134 +84,250 @@ export default function EquipmentPage() {
     createAsset.mutate(Object.fromEntries(formData.entries()));
   };
 
-  const filteredAssets = assets.filter((item: any) => 
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.serialNumber.toLowerCase().includes(searchQuery.toLowerCase())
+  const handleAssign = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const technicianId = fd.get("technicianId") as string;
+    if (!technicianId) return toast.error("Please select a technician");
+    assignTechnician.mutate({ assetId: assignModal.asset.id, technicianId });
+  };
+
+  const canManage = currentUser?.role === "admin" || currentUser?.role === "manager";
+
+  const safeAssets = Array.isArray(assets) ? assets : [];
+  const filteredAssets = safeAssets.filter((item: any) =>
+    item?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item?.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (isLoading) return <div className="p-10 text-center font-medium">Syncing Inventory...</div>;
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-      <header className="flex flex-col md:flex-row justify-between items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight text-left">Equipment Inventory</h1>
-          <p className="text-sm text-slate-500">Manage assets and maintenance history dynamically.</p>
-        </div>
-
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input 
-              placeholder="Search Name or Serial..." 
-              className="pl-9 bg-white"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {currentUser?.role === "admin" && (
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700 gap-2">
-                  <Plus size={18} /> Add New Asset
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[550px]">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-bold">Register New Asset</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleFormSubmit} className="grid grid-cols-2 gap-4 pt-4">
-                  <div className="col-span-2 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Asset Name</label>
-                    <Input name="name" placeholder="e.g. Samsung Monitor 15\" required />
-                  </div>
-                  <div className="col-span-2 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Serial Number</label>
-                    <Input name="serialNumber" placeholder="Unique ID (e.g. SN-9921)" required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Category</label>
-                    <Input name="category" placeholder="Monitors" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Department</label>
-                    <Input name="department" placeholder="Admin" />
-                  </div>
-                  {/* Added Location and Work Center to match your mockup requirements */}
-                  <div className="space-y-1.5 text-left">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Location / Address</label>
-                    <Input name="location" placeholder="Floor 1, Workshop" />
-                  </div>
-                  <div className="space-y-1.5 text-left">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Work Center</label>
-                    <Input name="workCenter" placeholder="Assembly Line A" />
-                  </div>
-                  <div className="col-span-2 space-y-1.5 text-left">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Assigned Employee</label>
-                    <Input name="assignedEmployee" placeholder="Technician Name" />
-                  </div>
-                  <Button type="submit" className="col-span-2 mt-2 bg-blue-600 font-bold uppercase tracking-widest py-6" disabled={createAsset.isPending}>
-                    {createAsset.isPending ? "Saving..." : "Save Asset"}
+    <div className="space-y-6">
+      <PageHeader
+        title="Asset Inventory"
+        subtitle="Manage equipment registry, maintenance records, and asset status"
+        icon={<HardDrive size={20} />}
+        accentColor="#06b6d4"
+        actions={
+          <div className="flex items-center gap-3">
+            <div className="relative w-56">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: '#475569' }} />
+              <Input
+                placeholder="Search name or serial..."
+                className="pl-9 h-9 rounded-xl text-sm"
+                style={{ background: 'rgba(30,40,64,0.6)', border: '1px solid rgba(148,163,184,0.12)', color: '#e8eaf2' }}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            {canManage && (
+              <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                <DialogTrigger asChild>
+                  <Button className="btn-glow gap-2 h-9 px-4 text-sm font-bold rounded-xl">
+                    <Plus size={16} /> Add Asset
                   </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
-      </header>
+                </DialogTrigger>
+                <DialogContent
+                  className="sm:max-w-[550px] rounded-2xl"
+                  style={{ background: 'rgba(13,21,37,0.98)', border: '1px solid rgba(148,163,184,0.12)', backdropFilter: 'blur(20px)' }}
+                >
+                  <DialogHeader>
+                    <DialogTitle className="text-lg font-bold flex items-center gap-2" style={{ color: '#e8eaf2' }}>
+                      <HardDrive size={17} style={{ color: '#06b6d4' }} /> Register New Asset
+                    </DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleFormSubmit} className="grid grid-cols-2 gap-4 pt-3">
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#475569' }}>Asset Name</label>
+                      <Input name="name" placeholder='e.g. CNC Lathe Machine' className="h-11 rounded-xl text-sm" style={darkInput} required />
+                    </div>
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#475569' }}>Serial Number</label>
+                      <Input name="serialNumber" placeholder="SN-9921" className="h-11 rounded-xl text-sm" style={darkInput} required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#475569' }}>Category</label>
+                      <Input name="category" placeholder="Machinery" className="h-11 rounded-xl text-sm" style={darkInput} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#475569' }}>Department</label>
+                      <Input name="department" placeholder="Production" className="h-11 rounded-xl text-sm" style={darkInput} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#475569' }}>Location</label>
+                      <Input name="location" placeholder="Floor 1, Bay A" className="h-11 rounded-xl text-sm" style={darkInput} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#475569' }}>Work Center</label>
+                      <Input name="workCenter" placeholder="Assembly Line A" className="h-11 rounded-xl text-sm" style={darkInput} />
+                    </div>
+                    <Button type="submit" className="col-span-2 h-11 btn-glow font-bold rounded-xl" disabled={createAsset.isPending}>
+                      {createAsset.isPending ? "Registering..." : "Register Asset"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredAssets.map((item: any) => (
-          <Card key={item.id} className="hover:shadow-xl transition-all border-slate-200 bg-white overflow-hidden text-left">
-            <CardHeader className="flex flex-row items-start justify-between pb-3">
-              <div className="space-y-1">
-                <CardTitle className="text-xl font-bold text-blue-700">{item.name}</CardTitle>
-                <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">{item.serialNumber}</p>
+      {/* Asset Cards Grid */}
+      {filteredAssets.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 space-y-3">
+          <HardDrive size={48} style={{ color: '#1e2840' }} />
+          <p className="text-sm font-semibold" style={{ color: '#475569' }}>No assets found</p>
+          <p className="text-xs" style={{ color: '#334155' }}>Add your first asset to get started</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filteredAssets.map((item: any) => (
+            <div
+              key={item.id}
+              className="rounded-2xl p-5 space-y-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg text-left"
+              style={{
+                background: 'rgba(19,25,41,0.9)',
+                border: '1px solid rgba(148,163,184,0.08)',
+                borderLeft: `3px solid ${item.isUsable ? '#10b981' : '#f43f5e'}`,
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-0.5 flex-1 min-w-0">
+                  <p className="text-base font-extrabold tracking-tight truncate" style={{ color: '#e8eaf2' }}>{item.name}</p>
+                  <p className="text-[10px] font-mono uppercase tracking-widest" style={{ color: '#334155' }}>{item.serialNumber}</p>
+                </div>
+                <span
+                  className="text-[9px] font-extrabold uppercase px-2 py-1 rounded-lg shrink-0"
+                  style={item.isUsable
+                    ? { background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }
+                    : { background: 'rgba(244,63,94,0.1)', color: '#f43f5e', border: '1px solid rgba(244,63,94,0.2)' }
+                  }
+                >
+                  {item.isUsable ? "Operational" : "Scrapped"}
+                </span>
               </div>
-              <Badge className={item.isUsable ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700 uppercase"}>
-                {item.isUsable ? "Operational" : "Scrapped"}
-              </Badge>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Box size={10} /> Category</p>
-                  <p className="text-xs font-semibold text-slate-700 truncate">{item.category || 'General'}</p>
-                </div>
-                <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Building2 size={10} /> Dept.</p>
-                  <p className="text-xs font-semibold text-slate-700 truncate">{item.department || 'Unassigned'}</p>
-                </div>
+
+              {/* Meta grid */}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { icon: <Box size={10} />, label: 'Category', value: item.category || 'General' },
+                  { icon: <Building2 size={10} />, label: 'Dept.', value: item.department || 'Unassigned' },
+                ].map(({ icon, label, value }) => (
+                  <div key={label} className="p-2 rounded-lg" style={{ background: 'rgba(30,40,64,0.6)', border: '1px solid rgba(148,163,184,0.06)' }}>
+                    <p className="text-[9px] font-bold uppercase mb-0.5 flex items-center gap-1" style={{ color: '#475569' }}>{icon} {label}</p>
+                    <p className="text-xs font-semibold truncate" style={{ color: '#94a3b8' }}>{value}</p>
+                  </div>
+                ))}
               </div>
-              <div className="space-y-2 text-sm text-slate-600">
-                <div className="flex items-center gap-2 font-medium">
-                  <MapPin size={14} className="text-blue-500" /> 
-                  <span className="truncate">{item.location || 'Not Specified'}</span>
-                </div>
-                <div className="flex items-center gap-2 font-medium">
-                  <Warehouse size={14} className="text-orange-500" /> 
-                  <span className="truncate">{item.workCenter || 'No Work Center'}</span>
-                </div>
-                <div className="flex items-center gap-2 font-medium">
-                  <User size={14} className="text-slate-400" /> 
-                  <span className="truncate">{item.assignedEmployee || 'Unassigned'}</span>
-                </div>
+
+              {/* Details */}
+              <div className="space-y-1.5 text-xs" style={{ color: '#64748b' }}>
+                <div className="flex items-center gap-2"><MapPin size={12} style={{ color: '#6366f1' }} /><span className="truncate">{item.location || 'No Location'}</span></div>
+                <div className="flex items-center gap-2"><Warehouse size={12} style={{ color: '#f59e0b' }} /><span className="truncate">{item.workCenter || 'No Work Center'}</span></div>
+                <div className="flex items-center gap-2"><User size={12} style={{ color: '#94a3b8' }} /><span className="truncate">{item.assignedEmployee || 'Unassigned'}</span></div>
               </div>
-              <Link href={`/equipment/${item.id}`} className="block pt-2">
-                <Button variant="outline" className="w-full justify-between hover:bg-blue-50 group border-slate-200">
-                  <span className="flex items-center gap-2 font-bold text-slate-700 uppercase text-xs tracking-tighter">
-                    <Wrench size={14} className="text-blue-600" /> Maintenance
-                  </span>
-                  <Badge className="bg-blue-600 text-white h-6 min-w-[24px] flex items-center justify-center rounded-full font-bold">
+
+              {/* Footer */}
+              <div className="pt-1 space-y-2" style={{ borderTop: '1px solid rgba(148,163,184,0.06)' }}>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-1.5" style={{ color: '#475569' }}>
+                    <Wrench size={13} style={{ color: '#f59e0b' }} />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Maintenance Records</span>
+                  </div>
+                  <span
+                    className="text-xs font-extrabold px-2.5 py-0.5 rounded-full"
+                    style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)' }}
+                  >
                     {item.requestCount || 0}
-                  </Badge>
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                  </span>
+                </div>
+
+                {/* Assign Technician — admin & manager only */}
+                {canManage && (
+                  <button
+                    onClick={() => setAssignModal({ open: true, asset: item })}
+                    className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all hover:opacity-90"
+                    style={{
+                      background: item.assignedTechnicianId
+                        ? 'rgba(16,185,129,0.12)'
+                        : 'rgba(99,102,241,0.12)',
+                      color: item.assignedTechnicianId ? '#10b981' : '#a5b4fc',
+                      border: `1px solid ${item.assignedTechnicianId ? 'rgba(16,185,129,0.25)' : 'rgba(99,102,241,0.25)'}`,
+                    }}
+                  >
+                    <UserCheck size={12} />
+                    {item.assignedTechnicianId ? 'Reassign Technician' : 'Assign Technician'}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Assign Technician Modal */}
+      <Dialog open={assignModal.open} onOpenChange={(v) => setAssignModal({ open: v, asset: assignModal.asset })}>
+        <DialogContent
+          className="sm:max-w-[420px] rounded-2xl"
+          style={{ background: 'rgba(13,21,37,0.98)', border: '1px solid rgba(148,163,184,0.12)', backdropFilter: 'blur(20px)' }}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2" style={{ color: '#e8eaf2' }}>
+              <UserCheck size={17} style={{ color: '#6366f1' }} /> Assign Technician
+            </DialogTitle>
+            {assignModal.asset && (
+              <p className="text-xs mt-1" style={{ color: '#64748b' }}>
+                Asset: <span style={{ color: '#94a3b8', fontWeight: 600 }}>{assignModal.asset.name}</span>
+              </p>
+            )}
+          </DialogHeader>
+          <form onSubmit={handleAssign} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#475569' }}>
+                Select Technician
+              </label>
+              <select
+                name="technicianId"
+                className="w-full h-11 rounded-xl text-sm px-3 outline-none"
+                style={darkInput}
+                required
+                defaultValue=""
+              >
+                <option value="" disabled>— Choose a technician —</option>
+                {technicians.length === 0 ? (
+                  <option disabled>No technicians available</option>
+                ) : (
+                  technicians.map((t: any) => (
+                    <option key={t.id} value={t.id}>{t.name} ({t.email})</option>
+                  ))
+                )}
+              </select>
+            </div>
+            <div
+              className="p-3 rounded-xl text-xs"
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)', color: '#94a3b8' }}
+            >
+              The assigned technician will be responsible for inspecting and repairing this asset.
+            </div>
+            <Button
+              type="submit"
+              className="w-full h-11 font-bold rounded-xl"
+              style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}
+              disabled={assignTechnician.isPending}
+            >
+              {assignTechnician.isPending ? "Assigning..." : "Confirm Assignment →"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+const darkInput: React.CSSProperties = {
+  background: 'rgba(30,40,64,0.7)',
+  border: '1px solid rgba(148,163,184,0.12)',
+  color: '#e8eaf2',
+};

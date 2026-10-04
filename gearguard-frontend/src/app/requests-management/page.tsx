@@ -24,16 +24,29 @@ export default function RequestsManagementPage() {
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ["requests-management"],
-    queryFn: () => fetch(`${API_BASE}/asset-requests`).then(res => res.json())
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/asset-requests`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
   });
 
   const { data: assets = [] } = useQuery({
     queryKey: ["equipment"],
-    queryFn: () => fetch(`${API_BASE}/equipment`).then(res => res.json())
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/equipment`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
   });
 
+  const safeAssets = Array.isArray(assets) ? assets : [];
+  const safeRequests = Array.isArray(requests) ? requests : [];
+
   // Filter assets that are operational and not currently assigned to someone
-  const availableAssets = assets.filter((a: any) => a.isUsable && (!a.assignedEmployee || a.assignedEmployee === "Unassigned"));
+  const availableAssets = safeAssets.filter((a: any) => a.isUsable && (!a.assignedEmployee || a.assignedEmployee === "Unassigned"));
 
   const approveRequest = useMutation({
     mutationFn: async (id: string) => {
@@ -119,8 +132,8 @@ export default function RequestsManagementPage() {
       </header>
 
       <div className="space-y-4 text-left">
-        {requests.length > 0 ? (
-          requests.map((req: any) => (
+        {safeRequests.length > 0 ? (
+          safeRequests.map((req: any) => (
             <Card key={req.id} className="border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-all">
               <CardContent className="p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                 <div className="space-y-2">

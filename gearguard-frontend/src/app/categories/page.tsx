@@ -21,7 +21,12 @@ export default function CategoriesPage() {
 
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ["categories"],
-    queryFn: () => fetch(`${API_BASE}/categories`).then(res => res.json())
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/categories`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
   });
 
   const createCategory = useMutation({
@@ -102,7 +107,7 @@ export default function CategoriesPage() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {categories.map((item: any) => (
+        {(Array.isArray(categories) ? categories : []).map((item: any) => (
           <Card key={item.id} className="hover:shadow-md transition-all border-slate-200 bg-white overflow-hidden text-left flex flex-col justify-between">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div className="space-y-1">
