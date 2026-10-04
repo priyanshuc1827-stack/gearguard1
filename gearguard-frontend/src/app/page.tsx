@@ -1,460 +1,1103 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  Wrench,
   Shield,
   Activity,
-  Zap,
-  Trello,
-  HardDrive,
-  BarChart3,
-  Calendar,
-  Users,
-  ClipboardList,
-  ChevronRight,
-  ArrowRight,
   CheckCircle2,
-  Cpu,
-  Wrench,
   AlertTriangle,
-  TrendingUp,
+  ArrowRight,
+  Terminal,
+  Cpu,
+  Layers,
+  Building2,
+  Boxes,
+  Clock,
+  ExternalLink,
+  ChevronRight,
+  Sparkles,
+  Zap,
   Lock,
-  Globe,
-  Star,
-  PlayCircle,
+  UserCheck,
+  Server,
+  BarChart3,
+  Moon,
+  Sun,
+  Laptop,
+  FileCheck,
+  TrendingDown,
+  Timer,
+  GitBranch,
+  RefreshCw,
 } from "lucide-react";
+import { useAuth } from "@/features/auth/auth-context";
+import { useTheme } from "@/components/ui/theme-provider";
 
-/* ─── useInView hook ─────────────────────────────────────────── */
-function useInView(threshold = 0.15) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setInView(true); },
-      { threshold }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [threshold]);
-  return { ref, inView };
+interface WorkflowStep {
+  id: number;
+  stage: string;
+  title: string;
+  badge: string;
+  color: string;
+  icon: React.ElementType;
+  actor: string;
+  description: string;
+  telemetry: {
+    event: string;
+    target: string;
+    impact: string;
+    output: string;
+  };
 }
 
-/* ─── AnimatedCounter ────────────────────────────────────────── */
-function AnimatedCounter({ end, suffix = "", duration = 2000 }: { end: number; suffix?: string; duration?: number }) {
-  const [count, setCount] = useState(0);
-  const { ref, inView } = useInView();
-  useEffect(() => {
-    if (!inView) return;
-    let start = 0;
-    const step = end / (duration / 16);
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= end) { setCount(end); clearInterval(timer); }
-      else setCount(Math.floor(start));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [inView, end, duration]);
-  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
-}
+const WORKFLOW_STEPS: WorkflowStep[] = [
+  {
+    id: 1,
+    stage: "Stage 01",
+    title: "Anomaly Detection & Breakdown Filing",
+    badge: "Shopfloor Operator",
+    color: "#f59e0b",
+    icon: AlertTriangle,
+    actor: "Plant Floor Operator",
+    description: "An operator detects abnormal hydraulic pressure fluctuation on an assigned press brake and files an emergency breakdown ticket with severity rating and failure photos.",
+    telemetry: {
+      event: "INCIDENT_REPORTED",
+      target: "Cincinnati 175-Ton Press Brake (AST-0004)",
+      impact: "Machine flagged with orange attention indicator",
+      output: "Ticket WO-0042 auto-generated with component metadata",
+    },
+  },
+  {
+    id: 2,
+    stage: "Stage 02",
+    title: "Strict Department Triage & Routing",
+    badge: "Division Manager",
+    color: "var(--blue)",
+    icon: GitBranch,
+    actor: "Department Superintendent",
+    description: "The ticket routes strictly to that division's manager (e.g. Machining complaints only route to Machining Manager). The manager inspects spare seals and dispatches a certified technician.",
+    telemetry: {
+      event: "DISPATCH_AUTHORIZED",
+      target: "Production Maintenance Team Alpha",
+      impact: "Zero cross-department noise; manager isolation preserved",
+      output: "Assigned to Lead Technician Carlos Gomez (tech.production)",
+    },
+  },
+  {
+    id: 3,
+    stage: "Stage 03",
+    title: "Kanban Transition & Live Repair Timer",
+    badge: "Maintenance Tech",
+    color: "var(--accent)",
+    icon: Timer,
+    actor: "Dispatched Technician",
+    description: "The technician drags the ticket to 'In Progress' on the Kanban board, initiates the stopwatch timer, executes the replacement SOP, and documents diagnostic measurements.",
+    telemetry: {
+      event: "WORK_IN_PROGRESS",
+      target: "Work Order #WO-0042",
+      impact: "Timer clocking downtime minutes for MTTR calculation",
+      output: "High-pressure valve spool replaced & torque tested to 65 Nm",
+    },
+  },
+  {
+    id: 4,
+    stage: "Stage 04",
+    title: "Automated Fleet Telemetry Sync",
+    badge: "Fleet Intelligence",
+    color: "var(--green)",
+    icon: RefreshCw,
+    actor: "System Automation",
+    description: "Ticket transitions to 'Repaired'. GearGuard automatically updates the physical machine's last_service_date timestamp, resets the downtime clock, and clears the alert badge across inventory.",
+    telemetry: {
+      event: "HEALTH_SYNCHRONIZED",
+      target: "Equipment Registry AST-0004",
+      impact: "last_service_date set to NOW; MTBF interval refreshed",
+      output: "Machine restored to 100% operational status in Command Center",
+    },
+  },
+  {
+    id: 5,
+    stage: "Stage 05",
+    title: "Tamper-Evident Ledger & ISO Audit",
+    badge: "Compliance Auditor",
+    color: "#8b5cf6",
+    icon: FileCheck,
+    actor: "Quality & Safety Auditor",
+    description: "Every action, timestamp, operator signature, and component cost is permanently committed to the immutable compliance ledger for instantaneous ISO 55001 / OSHA audit exports.",
+    telemetry: {
+      event: "AUDIT_COMMITTED",
+      target: "Ledger Record #LOG-0108",
+      impact: "Full cryptographic audit trail; zero manual paper logbooks",
+      output: "Complies with ISO 9001:2015 §7.1.3 Infrastructure Maintenance",
+    },
+  },
+];
 
-/* ─── FeatureCard ────────────────────────────────────────────── */
-function FeatureCard({ icon: Icon, color, title, desc, delay = 0 }: { icon: React.ElementType; color: string; title: string; desc: string; delay?: number }) {
-  const { ref, inView } = useInView();
-  return (
-    <div
-      ref={ref}
-      className="glass-card p-6 flex flex-col gap-4 group cursor-default"
-      style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(24px)", transition: `opacity 0.5s ease ${delay}ms, transform 0.5s ease ${delay}ms` }}
-    >
-      <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${color}18`, border: `1px solid ${color}30` }}>
-        <Icon size={20} style={{ color }} />
-      </div>
-      <div>
-        <h3 className="font-bold text-base mb-1" style={{ color: "#e8eaf2" }}>{title}</h3>
-        <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>{desc}</p>
-      </div>
-      <div className="mt-auto flex items-center gap-1 text-xs font-semibold opacity-0 group-hover:opacity-100" style={{ color, transition: "opacity 0.25s" }}>
-        Learn more <ChevronRight size={12} />
-      </div>
-    </div>
-  );
-}
+const DEPARTMENTS_DATA = [
+  {
+    name: "Machining",
+    icon: Cpu,
+    tag: "High-Precision CNC",
+    supervisor: "Robert Vance",
+    machinery: ["Haas VF-4 5-Axis CNC Mill", "Makino PS105 Machining Center", "Doosan Puma 2600Y Lathe", "Mitsubishi MV2400-S Wire EDM"],
+    stats: "21 Machines • 8 Technicians • 99.2% Spindle Uptime",
+    description: "Tolerances within 2 microns. Continuous automated tool wear monitoring, spindle vibration tracking, and oil replenishment.",
+  },
+  {
+    name: "Production",
+    icon: Boxes,
+    tag: "Heavy Fabrication",
+    supervisor: "Sarah Chen",
+    machinery: ["Cincinnati 175-Ton Hydraulic Press Brake", "Trumpf TruLaser 3030 Cell", "Komatsu 200-Ton Press", "Toyo SI-150-6 Injection Unit"],
+    stats: "24 Machines • 10 Technicians • Sub-45m Breakdown Response",
+    description: "High-tonnage stamping, sheet metal laser cutting, and hydraulic manifold control with zero tolerance for unplanned shutdowns.",
+  },
+  {
+    name: "Assembly",
+    icon: Layers,
+    tag: "Robotics & Automation",
+    supervisor: "Michael Chang",
+    machinery: ["Fanuc M-20iD/25 6-Axis Arm", "KUKA KR CYBERTECH Robot", "ABB IRB 6700 Spot Welder", "Universal Robots UR10e Cobot"],
+    stats: "18 Robotic Cells • 6 Automation Techs • 100% Vision QC",
+    description: "Multi-axis articulated robotics, ultrasonic plastic welders, and precision nutrunner stations with real-time torque feedback.",
+  },
+  {
+    name: "Facilities",
+    icon: Building2,
+    tag: "Plant Infrastructure",
+    supervisor: "David Miller",
+    machinery: ["Atlas Copco GA75 Screw Compressor", "Cleaver-Brooks 250 HP Steam Boiler", "Carrier 150-Ton Water Chiller", "Nitrogen Generator"],
+    stats: "12 Critical Utilities • 4 Boiler Engineers • 24/7 Redundancy",
+    description: "Factory utilities backbone supplying 8.5 bar compressed air, high-pressure steam, chilled water, and high-purity nitrogen.",
+  },
+  {
+    name: "Logistics",
+    icon: Activity,
+    tag: "Material Handling",
+    supervisor: "Elena Rostova",
+    machinery: ["Crown FC 5200 Electric Forklift", "Toyota 8FBE20 Reach Picker", "Hytrol Zero-Pressure Conveyor", "Lantech Pallet Wrapper"],
+    stats: "15 Fleet Units • 5 Mobile Techs • Battery Impedance Monitored",
+    description: "Automated warehouse material flow, dock leveler hydraulics, and counterbalance electric forklift fleet telemetry.",
+  },
+  {
+    name: "Quality Control",
+    icon: Shield,
+    tag: "Metrology & NDT",
+    supervisor: "Kavita Sharma",
+    machinery: ["Zeiss Contura 3D CMM", "Olympus OmniScan X3 Flaw Detector", "Instron 5985 250kN Tensile Tester", "Niton XL5 XRF Analyzer"],
+    stats: "16 Cleanroom Gauges • 4 Metrologists • ISO 17025 Compliant",
+    description: "Class 10,000 cleanroom metrology laboratory ensuring metallurgical integrity, dimensional accuracy, and non-destructive testing.",
+  },
+];
 
-/* ─── RoleBadge ──────────────────────────────────────────────── */
-function RoleBadge({ role, color, desc }: { role: string; color: string; desc: string }) {
-  return (
-    <div className="flex items-start gap-3 p-4 rounded-xl" style={{ background: `${color}0d`, border: `1px solid ${color}20` }}>
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: `${color}20` }}>
-        <Lock size={14} style={{ color }} />
-      </div>
-      <div>
-        <p className="font-bold text-sm" style={{ color }}>{role}</p>
-        <p className="text-xs mt-0.5" style={{ color: "#64748b" }}>{desc}</p>
-      </div>
-    </div>
-  );
-}
+const COMPARISON_ROWS = [
+  {
+    metric: "Mean Time to Repair (MTTR)",
+    traditional: "4.5 to 6.2 hours per incident",
+    gearguard: "1.8 hours (Automated dispatch & live timers)",
+    improvement: "-60% Downtime",
+  },
+  {
+    metric: "Emergency Breakdown Frequency",
+    traditional: "15–20 unplanned outages monthly",
+    gearguard: "Sub-2 outages via automated preventive calendar",
+    improvement: "-89% Failures",
+  },
+  {
+    metric: "Department Noise & Triage",
+    traditional: "Global email threads and misplaced calls",
+    gearguard: "Strict manager routing isolated to specific division",
+    improvement: "100% Scoped",
+  },
+  {
+    metric: "Machine Service Synchronization",
+    traditional: "Manual clipboard logs forgotten after repairs",
+    gearguard: "Auto-syncs last_service_date & scrap flags on status change",
+    improvement: "Zero Lost Data",
+  },
+  {
+    metric: "Regulatory & ISO Compliance Prep",
+    traditional: "2–4 days sifting paper binders and receipts",
+    gearguard: "1-Click instant export from tamper-evident audit ledger",
+    improvement: "Instant Readiness",
+  },
+  {
+    metric: "Machinery Custody & Possession",
+    traditional: "Unclear machine handovers between shifts",
+    gearguard: "Formal operator checkout & manager return approvals",
+    improvement: "Total Accountability",
+  },
+];
 
-/* ─── WorkflowStep ───────────────────────────────────────────── */
-function WorkflowStep({ num, title, desc, color }: { num: string; title: string; desc: string; color: string }) {
-  const { ref, inView } = useInView();
-  return (
-    <div ref={ref} className="flex gap-5 items-start" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateX(0)" : "translateX(-24px)", transition: "opacity 0.5s ease, transform 0.5s ease" }}>
-      <div className="w-10 h-10 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0" style={{ background: `${color}20`, color, border: `2px solid ${color}40` }}>
-        {num}
-      </div>
-      <div>
-        <h4 className="font-bold text-sm mb-1" style={{ color: "#e8eaf2" }}>{title}</h4>
-        <p className="text-sm" style={{ color: "#64748b" }}>{desc}</p>
-      </div>
-    </div>
-  );
-}
-
-/* ─── StatCard ───────────────────────────────────────────────── */
-function StatCard({ end, suffix, label, color }: { end: number; suffix: string; label: string; color: string }) {
-  return (
-    <div className="text-center p-6 glass-card">
-      <p className="text-3xl md:text-4xl font-black mb-1" style={{ color }}>
-        <AnimatedCounter end={end} suffix={suffix} />
-      </p>
-      <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#64748b" }}>{label}</p>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   LANDING PAGE
-═══════════════════════════════════════════════════════════════ */
 export default function LandingPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const { user } = useAuth();
+  const { resolved, setTheme } = useTheme();
+  const router = useRouter();
 
-  useEffect(() => {
-    const user = localStorage.getItem("user");
-    setIsLoggedIn(!!user);
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  const features = [
-    { icon: HardDrive,     color: "#10b981", title: "Smart Equipment Catalog",   desc: "Centralized inventory with serial numbers, warranty dates, technician assignments, and live status tracking." },
-    { icon: Trello,        color: "#6366f1", title: "Kanban Workflow Board",      desc: "Interactive drag-and-drop board to transition requests across New → In Progress → Repaired → Scrap stages." },
-    { icon: Calendar,      color: "#06b6d4", title: "Maintenance Calendar",       desc: "Visual timeline scheduler for preventive checkups, technician assignments, and recurring maintenance cycles." },
-    { icon: BarChart3,     color: "#f59e0b", title: "Analytics & Reporting",      desc: "Real-time MTTR, MTBF, downtime expense distribution, and high-risk equipment performance charts." },
-    { icon: Users,         color: "#f43f5e", title: "Role-Based Access Control",  desc: "Tailored dashboards for Admin, Manager, Technician, Operator, and Auditor — each with scoped permissions." },
-    { icon: ClipboardList, color: "#10b981", title: "Audit Trail",                desc: "Tamper-evident logging of every status transition, equipment allocation, and technician action." },
-    { icon: Wrench,        color: "#06b6d4", title: "Corrective Maintenance",     desc: "Log emergency breakdowns, assign technicians instantly, and track resolution time end-to-end." },
-    { icon: AlertTriangle, color: "#f59e0b", title: "Preventive Maintenance",     desc: "Automate recurring maintenance schedules and receive proactive alerts before failures occur." },
-  ];
-
-  const roles = [
-    { role: "Admin",      color: "#f43f5e", desc: "Full system access — team & user management, equipment creation" },
-    { role: "Manager",    color: "#6366f1", desc: "Asset approvals, maintenance request triage, analytics dashboard" },
-    { role: "Technician", color: "#10b981", desc: "Kanban task transitions, request updates, time tracking" },
-    { role: "Operator",   color: "#06b6d4", desc: "Asset breakdown reporting, self-service maintenance requests" },
-    { role: "Auditor",    color: "#f59e0b", desc: "Read-only compliance audits, system log inspections, reports" },
-  ];
-
-  const workflow = [
-    { num: "01", color: "#10b981", title: "Register Equipment",      desc: "Add machines with serial numbers, warranty terms, work-center locations, and assigned maintenance teams." },
-    { num: "02", color: "#6366f1", title: "Log Maintenance Request",  desc: "Create a corrective breakdown report or schedule a routine preventive checkup in minutes." },
-    { num: "03", color: "#06b6d4", title: "Kanban Lifecycle",         desc: "Drag & drop tasks across stages: New Request → In Progress → Repaired or Scrap." },
-    { num: "04", color: "#f59e0b", title: "Auto Status Sync",         desc: "Moving to Repaired auto-updates last_maintenance_date. Scrap flags the machine across inventory." },
-    { num: "05", color: "#f43f5e", title: "Analytics & CI",           desc: "Review MTTR, breakdown frequencies, and team efficiency to optimize plant reliability continuously." },
-  ];
-
-  const trustItems = [
-    { icon: CheckCircle2, label: "RBAC Security",      color: "#10b981" },
-    { icon: TrendingUp,   label: "Real-time MTTR",     color: "#06b6d4" },
-    { icon: Globe,        label: "Odoo-Inspired ERP",  color: "#6366f1" },
-    { icon: Star,         label: "Built for Industry", color: "#f59e0b" },
-  ];
-
-  const techStack = [
-    { name: "Next.js 15",    color: "#e8eaf2" },
-    { name: "FastAPI",       color: "#10b981" },
-    { name: "MongoDB",       color: "#4db33d" },
-    { name: "TypeScript",    color: "#3178c6" },
-    { name: "Tailwind CSS",  color: "#06b6d4" },
-    { name: "Radix UI",      color: "#6366f1" },
-    { name: "TanStack Query",color: "#f59e0b" },
-    { name: "Recharts",      color: "#f43f5e" },
-  ];
+  const [activeStep, setActiveStep] = useState(0);
+  const [activeDept, setActiveDept] = useState(0);
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#0b0f19", overflowX: "hidden" }}>
-
-      {/* ─── NAVBAR ──────────────────────────────────────────── */}
-      <nav
-        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-12 h-16"
+    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", overflowX: "hidden" }}>
+      {/* ── TOP NAV BAR ──────────────────────────────────────────────────────── */}
+      <header
         style={{
-          background: scrolled ? "rgba(11,15,25,0.92)" : "transparent",
-          backdropFilter: scrolled ? "blur(20px)" : "none",
-          borderBottom: scrolled ? "1px solid rgba(148,163,184,0.08)" : "none",
-          transition: "background 0.3s, border-bottom 0.3s",
+          position: "sticky",
+          top: 0,
+          zIndex: 40,
+          background: "var(--bg-elevated)",
+          borderBottom: "1px solid var(--border)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
         }}
       >
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)" }}>
-            <Zap size={16} style={{ color: "#10b981" }} />
-          </div>
-          <span className="font-black text-lg tracking-tight" style={{ color: "#e8eaf2" }}>
-            Gear<span style={{ color: "#10b981" }}>Guard</span>
-          </span>
-        </div>
-
-        <div className="hidden md:flex items-center gap-8">
-          {["Features", "Workflow", "Roles", "Stats"].map((item) => (
-            <a key={item} href={`#${item.toLowerCase()}`} className="text-sm font-medium" style={{ color: "#64748b" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#10b981")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}
-            >{item}</a>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-3">
-          {!isLoggedIn && (
-            <Link href="/login">
-              <button className="hidden sm:block text-sm font-semibold px-4 py-2 rounded-lg" style={{ color: "#10b981", border: "1px solid rgba(16,185,129,0.3)", background: "transparent" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(16,185,129,0.1)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
-              >Sign In</button>
-            </Link>
-          )}
-          <Link href={isLoggedIn ? "/dashboard" : "/login"}>
-            <button className="btn-glow text-sm font-bold px-5 py-2 rounded-lg">{isLoggedIn ? "Dashboard →" : "Get Started →"}</button>
-          </Link>
-        </div>
-      </nav>
-
-      {/* ─── HERO ────────────────────────────────────────────── */}
-      <section className="relative flex flex-col items-center justify-center min-h-screen px-6 pt-24 pb-16 text-center">
-        {/* Glow orbs */}
-        <div className="absolute pointer-events-none" style={{ top: "15%", left: "50%", transform: "translateX(-50%)", width: "700px", height: "350px", background: "radial-gradient(ellipse, rgba(16,185,129,0.1) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div className="absolute pointer-events-none" style={{ top: "40%", left: "20%", width: "300px", height: "300px", background: "radial-gradient(ellipse, rgba(99,102,241,0.06) 0%, transparent 70%)", filter: "blur(40px)" }} />
-        <div className="absolute pointer-events-none" style={{ top: "30%", right: "15%", width: "250px", height: "250px", background: "radial-gradient(ellipse, rgba(6,182,212,0.06) 0%, transparent 70%)", filter: "blur(40px)" }} />
-
-        <div className="relative w-full max-w-5xl space-y-8 animate-fade-in-up">
-          {/* Badge */}
-          <div className="flex items-center justify-center">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest" style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)", color: "#10b981" }}>
-              <div className="beacon beacon-green" style={{ width: 6, height: 6 }} />
-              Intelligent Asset Maintenance Platform
+        <div
+          style={{
+            maxWidth: 1280,
+            margin: "0 auto",
+            padding: "0 24px",
+            height: 64,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          {/* Logo & Brand */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: "var(--radius)",
+                background: "linear-gradient(135deg, var(--accent) 0%, #b45309 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ffffff",
+                boxShadow: "0 4px 12px rgba(217, 119, 6, 0.35)",
+              }}
+            >
+              <Wrench size={18} />
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.02em" }}>GearGuard</span>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  padding: "2px 6px",
+                  borderRadius: "var(--radius-sm)",
+                  background: "var(--accent-subtle)",
+                  color: "var(--accent)",
+                  border: "1px solid rgba(217, 119, 6, 0.2)",
+                }}
+              >
+                Enterprise ERP
+              </span>
             </div>
           </div>
 
-          {/* Heading */}
-          <h1 className="text-5xl md:text-7xl xl:text-8xl font-black tracking-tight leading-none" style={{ color: "#e8eaf2" }}>
-            The Control Panel
-            <br />
-            <span style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-              Your Plant Deserves
+          {/* Navigation Links */}
+          <nav style={{ display: "flex", alignItems: "center", gap: 24 }} className="desktop-nav">
+            <a href="#features" style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", textDecoration: "none" }}>
+              Core Modules
+            </a>
+            <a href="#workflow" style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", textDecoration: "none" }}>
+              Operational Flow
+            </a>
+            <a href="#departments" style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", textDecoration: "none" }}>
+              Plant Divisions
+            </a>
+            <a href="#impact" style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", textDecoration: "none" }}>
+              Reliability ROI
+            </a>
+            <a
+              href="http://localhost:3001/api/docs"
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}
+            >
+              API Docs <ExternalLink size={12} />
+            </a>
+          </nav>
+
+          {/* Action CTAs & Theme Toggle */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              className="btn btn-ghost btn-icon btn-sm"
+              onClick={() => setTheme(resolved === "dark" ? "light" : "dark")}
+              title="Toggle theme"
+              aria-label="Toggle theme"
+            >
+              {resolved === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+
+            {user ? (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => router.push("/dashboard")}
+                style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+              >
+                <span>Enter System ({user.name.split(" ")[0]})</span>
+                <ArrowRight size={14} />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="btn btn-primary btn-sm"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  textDecoration: "none",
+                  fontWeight: 600,
+                  padding: "7px 16px",
+                  borderRadius: "var(--radius-sm)",
+                }}
+              >
+                <span>Operator Sign In</span>
+                <ArrowRight size={14} />
+              </Link>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* ── HERO SECTION ─────────────────────────────────────────────────────── */}
+      <section
+        style={{
+          position: "relative",
+          padding: "85px 24px 75px",
+          maxWidth: 1280,
+          margin: "0 auto",
+          textAlign: "center",
+        }}
+      >
+        {/* Ambient background glow */}
+        <div
+          style={{
+            position: "absolute",
+            top: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "600px",
+            height: "300px",
+            background: "radial-gradient(circle, rgba(217, 119, 6, 0.14) 0%, rgba(217, 119, 6, 0) 70%)",
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        />
+
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 900, margin: "0 auto" }}>
+          {/* Status Live Telemetry Badge */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 14px",
+              borderRadius: 9999,
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+              marginBottom: 24,
+            }}
+          >
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "var(--green)",
+                boxShadow: "0 0 8px var(--green)",
+                animation: "pulse 2s infinite",
+              }}
+            />
+            <span style={{ fontSize: "12px", fontWeight: 600, letterSpacing: "0.02em" }}>
+              Live Telemetry Active • 81 Heavy Machinery Units • 0 Unresolved Critical Outages
+            </span>
+          </div>
+
+          {/* Main Headline */}
+          <h1
+            style={{
+              fontSize: "clamp(34px, 5.5vw, 60px)",
+              fontWeight: 800,
+              lineHeight: 1.12,
+              letterSpacing: "-0.03em",
+              marginBottom: 20,
+            }}
+          >
+            Zero Unplanned Downtime. <br />
+            <span
+              style={{
+                background: "linear-gradient(90deg, var(--accent) 0%, #f59e0b 50%, #d97706 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              Total Shopfloor Intelligence.
             </span>
           </h1>
 
-          {/* Subheading */}
-          <p className="text-lg md:text-xl max-w-2xl mx-auto leading-relaxed" style={{ color: "#64748b" }}>
-            GearGuard bridges physical machinery, plant technicians, managers, and repair workflows.
-            Eliminate downtime. Optimize maintenance. Operate with confidence.
+          {/* Subtitle */}
+          <p
+            style={{
+              fontSize: "clamp(15px, 2vw, 18px)",
+              lineHeight: 1.6,
+              color: "var(--text-secondary)",
+              maxWidth: 740,
+              margin: "0 auto 36px",
+            }}
+          >
+            The Odoo-inspired industrial maintenance operating system. Uniting 6 factory divisions, 
+            interactive Kanban work queues, operator breakdown complaints, custody handovers, 
+            and tamper-evident compliance audit ledgers in a single high-performance cockpit.
           </p>
 
-          {/* CTA row */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
-            <Link href={isLoggedIn ? "/dashboard" : "/login"}>
-              <button className="btn-glow inline-flex items-center gap-2 px-8 text-sm font-bold rounded-xl" style={{ height: "3.25rem" }}>
-                {isLoggedIn ? "Resume Dashboard" : "Access Control Panel"}
-                <ArrowRight size={16} />
-              </button>
+          {/* Clean Focused Hero CTA */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginBottom: 54 }}>
+            <Link
+              href="/login"
+              className="btn btn-primary"
+              style={{
+                padding: "13px 32px",
+                fontSize: "15px",
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                textDecoration: "none",
+                borderRadius: "var(--radius-md)",
+                boxShadow: "0 6px 22px rgba(217, 119, 6, 0.35)",
+              }}
+            >
+              <span>Operator Sign In</span>
+              <ArrowRight size={15} />
             </Link>
-            <a href="#features">
-              <button className="inline-flex items-center gap-2 px-8 text-sm font-semibold rounded-xl transition-all"
-                style={{ height: "3.25rem", border: "1px solid rgba(148,163,184,0.15)", color: "#94a3b8", background: "rgba(148,163,184,0.05)" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(16,185,129,0.3)"; (e.currentTarget as HTMLButtonElement).style.color = "#10b981"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(148,163,184,0.15)"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
-              >
-                <PlayCircle size={16} /> Explore Features
-              </button>
-            </a>
           </div>
 
-          {/* Trust strip */}
-          <div className="flex flex-wrap items-center justify-center gap-6" style={{ borderTop: "1px solid rgba(148,163,184,0.07)", marginTop: "1.5rem", paddingTop: "1.5rem" }}>
-            {trustItems.map(({ icon: Icon, label, color }, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Icon size={14} style={{ color }} />
-                <span className="text-xs font-semibold" style={{ color: "#64748b" }}>{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </section>
-
-      {/* ─── STATS ───────────────────────────────────────────── */}
-      <section id="stats" className="px-6 md:px-12 py-20">
-        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard end={1200} suffix="+"      label="Assets Tracked"  color="#10b981" />
-          <StatCard end={98}   suffix="%"      label="Uptime Accuracy" color="#06b6d4" />
-          <StatCard end={5}    suffix=" Roles" label="RBAC Profiles"   color="#6366f1" />
-          <StatCard end={2450} suffix=" hrs"   label="Avg MTBF"        color="#f59e0b" />
-        </div>
-      </section>
-
-      {/* ─── FEATURES ────────────────────────────────────────── */}
-      <section id="features" className="px-6 md:px-12 py-20">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4" style={{ background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)", color: "#6366f1" }}>
-              <Cpu size={10} /> Platform Capabilities
-            </div>
-            <h2 className="text-3xl md:text-4xl font-black mb-3" style={{ color: "#e8eaf2" }}>
-              Everything you need to <span style={{ color: "#10b981" }}>run a smart plant</span>
-            </h2>
-            <p className="text-base max-w-xl mx-auto" style={{ color: "#64748b" }}>
-              From breakdown logging to audit compliance — GearGuard covers the full maintenance lifecycle.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {features.map((f, i) => <FeatureCard key={i} {...f} delay={i * 60} />)}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── WORKFLOW ────────────────────────────────────────── */}
-      <section id="workflow" className="px-6 md:px-12 py-20">
-        <div className="max-w-5xl mx-auto rounded-2xl p-8 md:p-14 relative overflow-hidden" style={{ background: "#0d1525", border: "1px solid rgba(148,163,184,0.08)" }}>
-          <div className="absolute pointer-events-none" style={{ top: "-60px", right: "-60px", width: "300px", height: "300px", background: "radial-gradient(ellipse, rgba(16,185,129,0.06) 0%, transparent 70%)", filter: "blur(40px)" }} />
-          <div className="grid md:grid-cols-2 gap-12 items-start relative">
+          {/* Quick Metrics Bar */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 16,
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-md)",
+              padding: "18px 24px",
+              boxShadow: "0 8px 30px rgba(0, 0, 0, 0.05)",
+            }}
+          >
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-5" style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#10b981" }}>
-                <Activity size={10} /> Core Workflow
+              <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.05em" }}>
+                Machinery Monitored
               </div>
-              <h2 className="text-3xl md:text-4xl font-black mb-4" style={{ color: "#e8eaf2" }}>
-                From breakdown to<br /><span style={{ color: "#10b981" }}>resolution — fast.</span>
-              </h2>
-              <p className="text-base mb-8" style={{ color: "#64748b" }}>
-                GearGuard automates every step of the maintenance lifecycle so your team focuses on fixing, not filing.
-              </p>
-              <Link href={isLoggedIn ? "/kanban" : "/login"}>
-                <button className="btn-glow inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold">
-                  Open Kanban Board <ArrowRight size={14} />
-                </button>
-              </Link>
+              <div style={{ fontSize: "28px", fontWeight: 800, marginTop: 4, color: "var(--text)" }}>81 Assets</div>
+              <div style={{ fontSize: "12px", color: "var(--green)", marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                <CheckCircle2 size={12} /> 100% Barcoded & Serialized
+              </div>
             </div>
-            <div className="flex flex-col gap-6">
-              {workflow.map((step) => <WorkflowStep key={step.num} {...step} />)}
+
+            <div style={{ borderLeft: "1px solid var(--border)" }}>
+              <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.05em" }}>
+                Resolved Work Orders
+              </div>
+              <div style={{ fontSize: "28px", fontWeight: 800, marginTop: 4, color: "var(--text)" }}>110 Tickets</div>
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: 2 }}>
+                Preventive & Corrective
+              </div>
+            </div>
+
+            <div style={{ borderLeft: "1px solid var(--border)" }}>
+              <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.05em" }}>
+                Mean Time to Repair
+              </div>
+              <div style={{ fontSize: "28px", fontWeight: 800, marginTop: 4, color: "var(--accent)" }}>1.8 Hours</div>
+              <div style={{ fontSize: "12px", color: "var(--green)", marginTop: 2 }}>
+                -60% vs Industry Average
+              </div>
+            </div>
+
+            <div style={{ borderLeft: "1px solid var(--border)" }}>
+              <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.05em" }}>
+                Factory Divisions
+              </div>
+              <div style={{ fontSize: "28px", fontWeight: 800, marginTop: 4, color: "var(--text)" }}>6 Plants</div>
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: 2 }}>
+                Strict Departmental RBAC
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── ROLES ───────────────────────────────────────────── */}
-      <section id="roles" className="px-6 md:px-12 py-20">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4" style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.2)", color: "#f43f5e" }}>
-              <Shield size={10} /> Access Control
-            </div>
-            <h2 className="text-3xl md:text-4xl font-black mb-3" style={{ color: "#e8eaf2" }}>
-              Built for every <span style={{ color: "#6366f1" }}>team member</span>
+      {/* ── INTERACTIVE OPERATIONAL LIFECYCLE (REPLACES DEMO CREDS) ──────────── */}
+      <section
+        id="workflow"
+        style={{
+          padding: "80px 24px",
+          background: "var(--bg-sunken)",
+          borderTop: "1px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 46 }}>
+            <span
+              style={{
+                fontSize: "12px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "var(--accent)",
+              }}
+            >
+              Shopfloor Lifecycle
+            </span>
+            <h2 style={{ fontSize: "32px", fontWeight: 800, letterSpacing: "-0.02em", marginTop: 6 }}>
+              How GearGuard Eliminates Unplanned Downtime
             </h2>
-            <p className="text-base max-w-xl mx-auto" style={{ color: "#64748b" }}>
-              Role-based dashboards ensure each team member sees exactly what they need — nothing more, nothing less.
+            <p style={{ fontSize: "15px", color: "var(--text-secondary)", maxWidth: 660, margin: "10px auto 0" }}>
+              Explore the five continuous stages of physical asset intelligence—from the moment an anomaly is detected 
+              to technician resolution and tamper-evident audit archival.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {roles.map((r) => <RoleBadge key={r.role} {...r} />)}
-            <div className="flex flex-col items-center justify-center p-6 rounded-xl text-center" style={{ background: "rgba(16,185,129,0.05)", border: "1px dashed rgba(16,185,129,0.2)" }}>
-              <p className="text-sm font-bold mb-2" style={{ color: "#10b981" }}>Try any role now</p>
-              <p className="text-xs mb-4" style={{ color: "#64748b" }}>Use demo accounts with pre-seeded data</p>
-              <Link href="/login">
-                <button className="btn-glow text-xs font-bold px-5 py-2 rounded-lg">View Demo →</button>
-              </Link>
+
+          {/* Stepper Navigation Buttons */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: 12,
+              marginBottom: 32,
+            }}
+          >
+            {WORKFLOW_STEPS.map((s, idx) => {
+              const isSelected = activeStep === idx;
+              const Icon = s.icon;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveStep(idx)}
+                  className={`card ${isSelected ? "border-accent" : ""}`}
+                  style={{
+                    padding: "16px 14px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    background: isSelected ? "var(--bg-elevated)" : "transparent",
+                    border: isSelected ? `2px solid var(--accent)` : "1px solid var(--border)",
+                    borderRadius: "var(--radius-md)",
+                    transition: "all 150ms ease",
+                    boxShadow: isSelected ? "0 6px 20px rgba(217, 119, 6, 0.15)" : "none",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: isSelected ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      {s.stage}
+                    </span>
+                    <Icon size={16} style={{ color: isSelected ? "var(--accent)" : "var(--text-muted)" }} />
+                  </div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>
+                    {s.title}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active Step Live Simulator Display */}
+          {(() => {
+            const current = WORKFLOW_STEPS[activeStep];
+            const StepIcon = current.icon;
+            return (
+              <div
+                className="card"
+                style={{
+                  padding: "32px",
+                  background: "var(--bg-elevated)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border)",
+                  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.06)",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                  gap: 32,
+                  alignItems: "center",
+                }}
+              >
+                {/* Left explanation */}
+                <div>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "4px 10px", borderRadius: "var(--radius-sm)", background: "var(--bg-sunken)", border: "1px solid var(--border)", marginBottom: 14 }}>
+                    <StepIcon size={14} style={{ color: current.color }} />
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: current.color, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      {current.badge}
+                    </span>
+                  </div>
+
+                  <h3 style={{ fontSize: "22px", fontWeight: 700, letterSpacing: "-0.01em", margin: "0 0 10px" }}>
+                    {current.title}
+                  </h3>
+
+                  <p style={{ fontSize: "14.5px", color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 20 }}>
+                    {current.description}
+                  </p>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: "13px", color: "var(--text-muted)" }}>
+                    <Clock size={15} />
+                    <span>Average Execution Time: <strong>Sub-15 minutes</strong> across plant floor</span>
+                  </div>
+                </div>
+
+                {/* Right simulated telemetry card */}
+                <div
+                  style={{
+                    background: "var(--bg-sunken)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius)",
+                    padding: "20px 22px",
+                    fontFamily: "var(--font-mono)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)", paddingBottom: 10, marginBottom: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "12px", fontWeight: 600 }}>
+                      <Terminal size={14} style={{ color: "var(--accent)" }} />
+                      <span>GearGuard Event Bus Telemetry</span>
+                    </div>
+                    <span style={{ fontSize: "11px", color: "var(--green)", fontWeight: 600 }}>SYNCED</span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: "12px" }}>
+                    <div>
+                      <span style={{ color: "var(--text-muted)" }}>event: </span>
+                      <strong style={{ color: current.color }}>{current.telemetry.event}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--text-muted)" }}>target_asset: </span>
+                      <span style={{ color: "var(--text)" }}>{current.telemetry.target}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--text-muted)" }}>system_impact: </span>
+                      <span style={{ color: "var(--text)" }}>{current.telemetry.impact}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--text-muted)" }}>event_output: </span>
+                      <span style={{ color: "var(--green)" }}>{current.telemetry.output}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </section>
+
+      {/* ── CORE MODULES (6 PILLARS) ─────────────────────────────────────────── */}
+      <section id="features" style={{ padding: "80px 24px", maxWidth: 1280, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 50 }}>
+          <span style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--accent)" }}>
+            Architecture & Capabilities
+          </span>
+          <h2 style={{ fontSize: "32px", fontWeight: 800, letterSpacing: "-0.02em", marginTop: 6 }}>
+            Engineered for High-Reliability Plants
+          </h2>
+          <p style={{ fontSize: "15px", color: "var(--text-secondary)", maxWidth: 640, margin: "10px auto 0" }}>
+            Every component designed with zero-fluff industrial UX principles. Fast keyboard shortcuts, 
+            high-contrast readability, and deep integration across every physical asset.
+          </p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
+          {/* Pillar 1 */}
+          <div className="card" style={{ padding: "24px 22px" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "var(--radius)", background: "var(--accent-subtle)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)", marginBottom: 16 }}>
+              <BarChart3 size={20} />
             </div>
+            <h3 style={{ fontSize: "17px", fontWeight: 700, marginBottom: 8 }}>Command Center & Fleet Telemetry</h3>
+            <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Real-time calculation of Mean Time to Repair (MTTR), Mean Time Between Failures (MTBF), 
+              downtime expense attribution, and high-risk equipment detection without slow N+1 database queries.
+            </p>
+          </div>
+
+          {/* Pillar 2 */}
+          <div className="card" style={{ padding: "24px 22px" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "var(--radius)", background: "var(--blue-subtle)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--blue)", marginBottom: 16 }}>
+              <Wrench size={20} />
+            </div>
+            <h3 style={{ fontSize: "17px", fontWeight: 700, marginBottom: 8 }}>Work Order Kanban Lifecycle</h3>
+            <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Interactive drag-and-drop workflow tracking tickets from <strong>New Request</strong> to <strong>In Progress</strong> and <strong>Repaired</strong>. 
+              Includes automated scrap state handling and synchronized machine service timestamps.
+            </p>
+          </div>
+
+          {/* Pillar 3 */}
+          <div className="card" style={{ padding: "24px 22px" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "var(--radius)", background: "var(--green-subtle)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--green)", marginBottom: 16 }}>
+              <Boxes size={20} />
+            </div>
+            <h3 style={{ fontSize: "17px", fontWeight: 700, marginBottom: 8 }}>Smart Equipment Catalog & Odoo Buttons</h3>
+            <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Complete machinery registry with serial numbers, warranty terms, work-center locations, and assigned operators. 
+              Smart badge buttons show live active work order counts directly on detail sheets.
+            </p>
+          </div>
+
+          {/* Pillar 4 */}
+          <div className="card" style={{ padding: "24px 22px" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "var(--radius)", background: "#faf5ff", display: "flex", alignItems: "center", justifyContent: "center", color: "#9333ea", marginBottom: 16 }}>
+              <AlertTriangle size={20} />
+            </div>
+            <h3 style={{ fontSize: "17px", fontWeight: 700, marginBottom: 8 }}>Operator Complaint Triage & Dispatch</h3>
+            <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Plant operators log breakdown reports with severity ratings and component descriptions. 
+              Tickets are strictly routed to their specific department manager for technician dispatch.
+            </p>
+          </div>
+
+          {/* Pillar 5 */}
+          <div className="card" style={{ padding: "24px 22px" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "var(--radius)", background: "#fff7ed", display: "flex", alignItems: "center", justifyContent: "center", color: "#ea580c", marginBottom: 16 }}>
+              <Layers size={20} />
+            </div>
+            <h3 style={{ fontSize: "17px", fontWeight: 700, marginBottom: 8 }}>Machine Custody & Storage Return</h3>
+            <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Tracks physical possession of machinery. Operators request machine allocations, department managers 
+              review budget authorizations, and return-to-storage handovers reset active custody.
+            </p>
+          </div>
+
+          {/* Pillar 6 */}
+          <div className="card" style={{ padding: "24px 22px" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "var(--radius)", background: "var(--red-subtle)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--red)", marginBottom: 16 }}>
+              <Shield size={20} />
+            </div>
+            <h3 style={{ fontSize: "17px", fontWeight: 700, marginBottom: 8 }}>Immutable Ledger & Compliance Audit</h3>
+            <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Tamper-evident audit trail capturing user IDs, timestamps, entity diffs, and state transitions. 
+              Includes technician resolution leaderboards and full ISO/OSHA readiness exports.
+            </p>
           </div>
         </div>
       </section>
 
-      {/* ─── TECH STACK ──────────────────────────────────────── */}
-      <section className="px-6 md:px-12 py-12">
-        <div className="max-w-5xl mx-auto py-8 px-8 rounded-2xl" style={{ background: "rgba(13,21,37,0.7)", border: "1px solid rgba(148,163,184,0.07)" }}>
-          <p className="text-center text-[10px] uppercase tracking-widest font-bold mb-8" style={{ color: "#1e2840" }}>Powered By</p>
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
-            {techStack.map((tech) => (
-              <span key={tech.name} className="text-sm font-bold tracking-tight" style={{ color: tech.color, opacity: 0.7 }}>{tech.name}</span>
-            ))}
+      {/* ── DEPARTMENT EXPLORER TABS ────────────────────────────────────────── */}
+      <section
+        id="departments"
+        style={{
+          padding: "70px 24px",
+          background: "var(--bg-sunken)",
+          borderTop: "1px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 36 }}>
+            <span style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--accent)" }}>
+              Multi-Department Partitioning
+            </span>
+            <h2 style={{ fontSize: "32px", fontWeight: 800, letterSpacing: "-0.02em", marginTop: 6 }}>
+              6 Factory Divisions Operating in Harmony
+            </h2>
+            <p style={{ fontSize: "15px", color: "var(--text-secondary)", maxWidth: 640, margin: "10px auto 0" }}>
+              Explore how each industrial unit maintains dedicated equipment catalogs, technician teams, and strict manager isolation.
+            </p>
+          </div>
+
+          {/* Department Tabs */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: 30,
+            }}
+          >
+            {DEPARTMENTS_DATA.map((d, idx) => {
+              const Icon = d.icon;
+              const isActive = activeDept === idx;
+              return (
+                <button
+                  key={d.name}
+                  onClick={() => setActiveDept(idx)}
+                  className={`btn btn-sm ${isActive ? "btn-primary" : "btn-default"}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 16px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    borderRadius: "var(--radius-sm)",
+                  }}
+                >
+                  <Icon size={14} />
+                  <span>{d.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active Department Showcase Panel */}
+          {(() => {
+            const current = DEPARTMENTS_DATA[activeDept];
+            const Icon = current.icon;
+            return (
+              <div
+                className="card"
+                style={{
+                  padding: "32px",
+                  background: "var(--bg-elevated)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border)",
+                  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.05)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: "var(--radius)",
+                        background: "var(--accent-subtle)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--accent)",
+                      }}
+                    >
+                      <Icon size={22} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}>
+                        {current.name} Division
+                      </h3>
+                      <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: 2 }}>
+                        Work Center Supervisor: <strong>{current.supervisor}</strong> • Tag: {current.tag}
+                      </div>
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      padding: "4px 10px",
+                      borderRadius: "var(--radius-sm)",
+                      background: "var(--bg-sunken)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    {current.stats}
+                  </span>
+                </div>
+
+                <p style={{ fontSize: "14px", color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 24 }}>
+                  {current.description}
+                </p>
+
+                <div>
+                  <div style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.05em", marginBottom: 10 }}>
+                    Sample High-Value Machinery In This Division:
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
+                    {current.machinery.map((mach, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          padding: "10px 14px",
+                          borderRadius: "var(--radius-sm)",
+                          background: "var(--bg-sunken)",
+                          border: "1px solid var(--border)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: "13px",
+                          fontWeight: 500,
+                        }}
+                      >
+                        <Wrench size={14} style={{ color: "var(--accent)" }} />
+                        <span>{mach}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </section>
+
+      {/* ── QUANTIFIABLE IMPACT & RELIABILITY ROI ────────────────────────────── */}
+      <section id="impact" style={{ padding: "80px 24px", maxWidth: 1280, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 44 }}>
+          <span style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--accent)" }}>
+            Quantifiable Factory Impact
+          </span>
+          <h2 style={{ fontSize: "32px", fontWeight: 800, letterSpacing: "-0.02em", marginTop: 6 }}>
+            Traditional Factory Maintenance vs. GearGuard
+          </h2>
+          <p style={{ fontSize: "15px", color: "var(--text-secondary)", maxWidth: 640, margin: "10px auto 0" }}>
+            See how transitioning to an automated, telemetry-driven platform dramatically reduces downtime and administrative overhead.
+          </p>
+        </div>
+
+        <div className="table-container" style={{ borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)" }}>
+          <table className="data-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "var(--bg-elevated)", borderBottom: "1px solid var(--border)" }}>
+                <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", fontWeight: 600 }}>Operational Vector</th>
+                <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)" }}>Traditional Plant Setup</th>
+                <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", fontWeight: 600, color: "var(--accent)" }}>GearGuard Enterprise</th>
+                <th style={{ padding: "16px 20px", textAlign: "right", fontSize: "13px", fontWeight: 600 }}>Measured Delta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARISON_ROWS.map((row, idx) => (
+                <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={{ padding: "14px 20px", fontWeight: 600, fontSize: "13.5px" }}>{row.metric}</td>
+                  <td style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "13px" }}>{row.traditional}</td>
+                  <td style={{ padding: "14px 20px", fontWeight: 600, color: "var(--text)", fontSize: "13.5px" }}>{row.gearguard}</td>
+                  <td style={{ padding: "14px 20px", textAlign: "right" }}>
+                    <span
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "var(--radius-sm)",
+                        background: "var(--green-subtle)",
+                        color: "var(--green)",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {row.improvement}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* ── TECHNICAL STACK & ARCHITECTURE ──────────────────────────────────── */}
+      <section style={{ padding: "60px 24px 80px", maxWidth: 1280, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 44 }}>
+          <span style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--accent)" }}>
+            Engineered For Speed & Reliability
+          </span>
+          <h2 style={{ fontSize: "32px", fontWeight: 800, letterSpacing: "-0.02em", marginTop: 6 }}>
+            Modern Full-Stack Technical Foundation
+          </h2>
+          <p style={{ fontSize: "15px", color: "var(--text-secondary)", maxWidth: 640, margin: "10px auto 0" }}>
+            Zero unnecessary bloat. Clean separation of concerns with asynchronous Python micro-services and Next.js React 19.
+          </p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+          <div className="card" style={{ padding: "20px" }}>
+            <div style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--accent)", marginBottom: 8 }}>
+              Frontend Tier
+            </div>
+            <h4 style={{ fontSize: "16px", fontWeight: 700, marginBottom: 6 }}>Next.js 16 App Router</h4>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+              React 19, TypeScript, TanStack React Query v5 caching, Lucide icons, and Vanilla CSS design tokens.
+            </p>
+          </div>
+
+          <div className="card" style={{ padding: "20px" }}>
+            <div style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--blue)", marginBottom: 8 }}>
+              Backend Tier
+            </div>
+            <h4 style={{ fontSize: "16px", fontWeight: 700, marginBottom: 6 }}>FastAPI 2.0 Async</h4>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+              Python 3.10+ async ASGI server with Pydantic v2 schemas, JWT authentication in HTTP-only cookies, and SlowAPI rate limiting.
+            </p>
+          </div>
+
+          <div className="card" style={{ padding: "20px" }}>
+            <div style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--green)", marginBottom: 8 }}>
+              Data Layer
+            </div>
+            <h4 style={{ fontSize: "16px", fontWeight: 700, marginBottom: 6 }}>MongoDB & Beanie ODM</h4>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+              Official Motor async driver with 9 strongly typed Beanie document collections, composite indices, and aggregation pipelines.
+            </p>
+          </div>
+
+          <div className="card" style={{ padding: "20px" }}>
+            <div style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "#9333ea", marginBottom: 8 }}>
+              Security & UI
+            </div>
+            <h4 style={{ fontSize: "16px", fontWeight: 700, marginBottom: 6 }}>RBAC & Backdrop Blur</h4>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+              Frosted-glass modal popups, department scoping, audit helper hooks, and dark/light system theme switching.
+            </p>
           </div>
         </div>
       </section>
 
-      {/* ─── FINAL CTA ───────────────────────────────────────── */}
-      <section className="px-6 md:px-12 py-24">
-        <div className="max-w-4xl mx-auto text-center rounded-3xl p-12 md:p-16 relative overflow-hidden"
-          style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(99,102,241,0.08) 100%)", border: "1px solid rgba(16,185,129,0.15)" }}
+      {/* ── FOOTER ───────────────────────────────────────────────────────────── */}
+      <footer
+        style={{
+          background: "var(--bg-elevated)",
+          borderTop: "1px solid var(--border)",
+          padding: "48px 24px 36px",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1280,
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 20,
+          }}
         >
-          <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(16,185,129,0.1) 0%, transparent 60%)" }} />
-          <div className="relative">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest mb-6" style={{ background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)", color: "#10b981" }}>
-              <Zap size={10} /> Ready to Deploy
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: "var(--radius)",
+                background: "var(--accent)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ffffff",
+              }}
+            >
+              <Wrench size={15} />
             </div>
-            <h2 className="text-3xl md:text-5xl font-black mb-4" style={{ color: "#e8eaf2" }}>
-              Take control of your{" "}
-              <span style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-                industrial assets
-              </span>
-            </h2>
-            <p className="text-base md:text-lg mb-8 max-w-xl mx-auto" style={{ color: "#64748b" }}>
-              Join teams that trust GearGuard to eliminate unplanned downtime, reduce repair costs, and keep every machine running at peak performance.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href={isLoggedIn ? "/dashboard" : "/login"}>
-                <button className="btn-glow inline-flex items-center gap-2 px-10 py-3.5 rounded-xl text-sm font-bold">
-                  {isLoggedIn ? "Open Dashboard" : "Access Control Panel"} <ArrowRight size={16} />
-                </button>
-              </Link>
-              <a href="#features">
-                <button className="inline-flex items-center gap-2 px-10 py-3.5 rounded-xl text-sm font-semibold transition-all"
-                  style={{ border: "1px solid rgba(148,163,184,0.15)", color: "#94a3b8", background: "transparent" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(16,185,129,0.3)"; (e.currentTarget as HTMLButtonElement).style.color = "#10b981"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(148,163,184,0.15)"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
-                >Explore Features</button>
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── FOOTER ──────────────────────────────────────────── */}
-      <footer className="px-6 md:px-12 py-8" style={{ borderTop: "1px solid rgba(148,163,184,0.06)" }}>
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)" }}>
-              <Zap size={12} style={{ color: "#10b981" }} />
-            </div>
-            <span className="font-black text-sm" style={{ color: "#e8eaf2" }}>
-              Gear<span style={{ color: "#10b981" }}>Guard</span>
+            <span style={{ fontSize: "16px", fontWeight: 700 }}>GearGuard</span>
+            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+              — Intelligent Asset Maintenance Platform
             </span>
           </div>
-          <div className="flex items-center gap-6">
-            {["Features", "Workflow", "Roles", "Dashboard"].map((item) => (
-              <a key={item} href={item === "Dashboard" ? (isLoggedIn ? "/dashboard" : "/login") : `#${item.toLowerCase()}`}
-                className="text-xs font-medium" style={{ color: "#1e2840" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#10b981")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#1e2840")}
-              >{item}</a>
-            ))}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 20, fontSize: "13px", color: "var(--text-secondary)" }}>
+            <Link href="/login" style={{ color: "inherit", textDecoration: "none" }}>
+              Operator Sign In
+            </Link>
+            <a href="http://localhost:3001/api/docs" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "none" }}>
+              API Swagger Docs
+            </a>
+            <a href="https://www.loom.com/share/cf38a46e897c4508a00ad83d5d006aff" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "none" }}>
+              Loom Walkthrough
+            </a>
+            <span style={{ color: "var(--text-muted)" }}>© 2026 GearGuard Systems</span>
           </div>
-          <p className="text-[10px] uppercase tracking-widest" style={{ color: "#1e2840" }}>
-            GearGuard &copy; 2026 &middot; Secure Terminal v4.0
-          </p>
         </div>
       </footer>
-
     </div>
   );
 }

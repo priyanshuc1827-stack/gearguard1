@@ -1,31 +1,28 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
-import { Toaster } from "sonner";
+import { useState, useEffect } from "react";
+import { AuthProvider } from "@/features/auth/auth-context";
+import { ThemeProvider } from "@/components/ui/theme-provider";
+import { ToastProvider } from "@/components/ui/toast";
 
-export default function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+    },
+  },
+});
 
+export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
-      <Toaster
-        position="bottom-right"
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: "rgba(19,25,41,0.95)",
-            border: "1px solid rgba(148,163,184,0.12)",
-            color: "#e8eaf2",
-            backdropFilter: "blur(16px)",
-            borderRadius: "12px",
-            fontSize: "13px",
-            fontWeight: 500,
-          },
-        }}
-        richColors
-      />
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

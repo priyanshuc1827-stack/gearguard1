@@ -1,240 +1,89 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import React, { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Trello, Calendar, HardDrive,
-  LogOut, Zap, LogIn, BarChart3,
-  Users, Layers, MapPin, ClipboardList, FileText, Shield
+  LayoutDashboard, Wrench, CalendarDays, Package, Inbox,
+  Monitor, BarChart2, Shield, LogOut, ChevronLeft, ChevronRight, Moon, Sun,
+  AlertTriangle,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuth } from "@/features/auth/auth-context";
+import { useTheme } from "@/components/ui/theme-provider";
+import type { UserRole } from "@/lib/api";
 
-export default function Sidebar() {
-  const router = useRouter();
+interface NavItem {
+  label: string;
+  href: string;
+  icon: React.ElementType;
+  roles: UserRole[];
+}
+
+const NAV: NavItem[] = [
+  { label: "Command Center", href: "/dashboard",    icon: LayoutDashboard, roles: ["admin", "manager"] },
+  { label: "Work Queue",     href: "/work-orders",  icon: Wrench,          roles: ["admin", "manager", "technician", "auditor"] },
+  { label: "Complaints",     href: "/complaints",   icon: AlertTriangle,   roles: ["user", "manager", "admin"] },
+  { label: "My Equipment",   href: "/my-equipment", icon: Monitor,         roles: ["user"] },
+  { label: "Schedule",       href: "/schedule",     icon: CalendarDays,    roles: ["admin", "manager"] },
+  { label: "My Work",        href: "/my-work",      icon: Wrench,          roles: ["technician"] },
+  { label: "Custody & Approvals", href: "/approvals", icon: Inbox,       roles: ["admin", "manager"] },
+  { label: "Assets",         href: "/assets",       icon: Package,         roles: ["admin", "manager", "technician", "auditor"] },
+  { label: "Registry",       href: "/registry",     icon: Shield,          roles: ["admin"] },
+  { label: "Ledger",         href: "/ledger",       icon: BarChart2,       roles: ["admin", "auditor", "manager"] },
+];
+
+export function Sidebar() {
+  const { user, logout } = useAuth();
+  const { resolved, setTheme } = useTheme();
   const pathname = usePathname();
-  const [user, setUser] = useState<{ id: string; name: string; email: string; role?: string } | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, [pathname]);
-
-  const handleSignOut = () => {
-    localStorage.removeItem("user");
-    setUser(null);
-    router.push("/login");
-  };
-
-  const isAuthPage = pathname === "/login" || pathname === "/signup";
-  const isLandingPage = pathname === "/";
-  if (isAuthPage || isLandingPage) return null;
-
-  const getMenuItems = () => {
-    const role = user?.role;
-    if (role === "admin") {
-      return [
-        { name: "Dashboard",  icon: <LayoutDashboard size={17} />, href: "/dashboard" },
-        { name: "Kanban Board", icon: <Trello size={17} />,         href: "/kanban" },
-        { name: "Assets",     icon: <HardDrive size={17} />,        href: "/equipment" },
-        { name: "Categories", icon: <Layers size={17} />,           href: "/categories" },
-        { name: "Locations",  icon: <MapPin size={17} />,           href: "/locations" },
-        { name: "Users",      icon: <Users size={17} />,            href: "/users" },
-      ];
-    }
-    if (role === "manager") {
-      return [
-        { name: "Dashboard",      icon: <LayoutDashboard size={17} />, href: "/dashboard" },
-        { name: "Kanban Board",   icon: <Trello size={17} />,          href: "/kanban" },
-        { name: "Assets",         icon: <HardDrive size={17} />,        href: "/equipment" },
-        { name: "Asset Requests", icon: <ClipboardList size={17} />,   href: "/requests-management" },
-        { name: "Audit Logs",     icon: <FileText size={17} />,        href: "/audit-logs" },
-      ];
-    }
-    if (role === "user") {
-      return [
-        { name: "Dashboard",   icon: <LayoutDashboard size={17} />, href: "/dashboard" },
-        { name: "My Requests", icon: <ClipboardList size={17} />,   href: "/my-requests" },
-      ];
-    }
-    if (role === "technician") {
-      return [
-        { name: "Dashboard",   icon: <LayoutDashboard size={17} />, href: "/dashboard" },
-        { name: "Kanban Board", icon: <Trello size={17} />,         href: "/kanban" },
-        { name: "Calendar",    icon: <Calendar size={17} />,        href: "/calendar" },
-      ];
-    }
-    if (role === "auditor") {
-      return [
-        { name: "Dashboard",   icon: <LayoutDashboard size={17} />, href: "/dashboard" },
-        { name: "Kanban Board", icon: <Trello size={17} />,         href: "/kanban" },
-        { name: "Reporting",   icon: <BarChart3 size={17} />,       href: "/reporting" },
-        { name: "Audit Logs",  icon: <FileText size={17} />,        href: "/audit-logs" },
-      ];
-    }
-    return [
-      { name: "Dashboard", icon: <LayoutDashboard size={17} />, href: "/dashboard" }
-    ];
-  };
-
-  const menuItems = getMenuItems();
-
-  const getRoleBadge = (role: string | undefined) => {
-    switch (role) {
-      case "admin":      return { text: "Admin",      color: "#f43f5e" };
-      case "manager":    return { text: "Manager",    color: "#f59e0b" };
-      case "technician": return { text: "Technician", color: "#10b981" };
-      case "auditor":    return { text: "Auditor",    color: "#6366f1" };
-      case "user":       return { text: "Employee",   color: "#06b6d4" };
-      default:           return { text: "Guest",      color: "#64748b" };
-    }
-  };
-  const badge = getRoleBadge(user?.role);
+  if (!user) return null;
+  const visible = NAV.filter((n) => n.roles.includes(user.role));
 
   return (
     <aside
-      className="w-64 flex flex-col justify-between h-full shrink-0"
-      style={{
-        background: "var(--sidebar)",
-        borderRight: "1px solid var(--sidebar-border)",
-      }}
+      className="sidebar"
+      style={{ width: collapsed ? "var(--sidebar-collapsed)" : "var(--sidebar-width)" }}
+      aria-label="Main navigation"
     >
-      {/* ── Logo ── */}
-      <div className="p-5">
-        <div className="flex items-center gap-3 px-1 pt-2 pb-7">
-          <div
-            className="p-2 rounded-xl flex items-center justify-center"
-            style={{ background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)" }}
-          >
-            <Zap size={18} style={{ color: "#10b981" }} />
-          </div>
-          <div>
-            <span
-              className="font-extrabold text-lg tracking-tight leading-none"
-              style={{ color: "#e8eaf2" }}
-            >
-              GearGuard
-            </span>
-            <div className="flex items-center gap-1 mt-0.5">
-              <span className="beacon beacon-green" />
-              <span style={{ color: "#10b981", fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                Live Monitoring
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Navigation ── */}
-        <nav className="space-y-1">
-          <p
-            style={{ color: "#475569", fontSize: "9px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}
-            className="px-3 mb-3"
-          >
-            Navigation
-          </p>
-          {menuItems.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all"
-                style={
-                  active
-                    ? {
-                        background: "linear-gradient(90deg, rgba(16,185,129,0.15), rgba(16,185,129,0.05))",
-                        borderLeft: "2px solid #10b981",
-                        color: "#10b981",
-                        paddingLeft: "10px",
-                      }
-                    : {
-                        color: "#64748b",
-                        borderLeft: "2px solid transparent",
-                        paddingLeft: "10px",
-                      }
-                }
-                onMouseEnter={(e) => {
-                  if (!active) {
-                    (e.currentTarget as HTMLElement).style.color = "#94a3b8";
-                    (e.currentTarget as HTMLElement).style.background = "rgba(30,40,64,0.6)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!active) {
-                    (e.currentTarget as HTMLElement).style.color = "#64748b";
-                    (e.currentTarget as HTMLElement).style.background = "transparent";
-                  }
-                }}
-              >
-                {item.icon}
-                <span style={{ fontSize: "13px", fontWeight: active ? 600 : 400 }}>{item.name}</span>
-                {active && (
-                  <div
-                    className="ml-auto w-1.5 h-1.5 rounded-full"
-                    style={{ background: "#10b981", boxShadow: "0 0 6px #10b981" }}
-                  />
-                )}
-              </Link>
-            );
-          })}
-        </nav>
+      <div style={{ padding: "12px var(--space-3)", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        {!collapsed && (
+          <span style={{ fontWeight: 600, fontSize: "var(--text-md)", letterSpacing: "-0.02em" }}>GearGuard</span>
+        )}
+        <button className="btn btn-ghost btn-icon" onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
       </div>
 
-      {/* ── User Panel ── */}
-      <div
-        className="p-4 space-y-3"
-        style={{ borderTop: "1px solid var(--sidebar-border)" }}
-      >
-        {user ? (
-          <>
-            <div className="flex items-center gap-3 px-1 py-2 rounded-xl"
-              style={{ background: "rgba(30,40,64,0.6)", border: "1px solid rgba(148,163,184,0.08)" }}>
-              <Avatar className="h-9 w-9 shrink-0">
-                <AvatarFallback
-                  className="text-xs font-bold uppercase"
-                  style={{ background: `${badge.color}22`, color: badge.color, border: `1px solid ${badge.color}44` }}
-                >
-                  {user.name?.substring(0, 2)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="overflow-hidden flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate" style={{ color: "#e8eaf2" }}>{user.name}</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <Shield size={9} style={{ color: badge.color, flexShrink: 0 }} />
-                  <span
-                    className="text-[9px] font-bold uppercase tracking-wider truncate"
-                    style={{ color: badge.color }}
-                  >
-                    {badge.text}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 text-sm font-medium transition-all"
-              style={{ color: "#f43f5e" }}
-              onClick={handleSignOut}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(244,63,94,0.1)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-            >
-              <LogOut size={16} />
-              <span>Sign Out</span>
-            </Button>
-          </>
-        ) : (
-          <Link href="/login" className="w-full block">
-            <Button
-              className="w-full justify-start gap-3 text-sm font-medium btn-glow"
-            >
-              <LogIn size={16} />
-              <span>Login</span>
-            </Button>
-          </Link>
+      <nav style={{ flex: 1, overflowY: "auto", padding: "var(--space-2)", display: "flex", flexDirection: "column", gap: 2 }}>
+        {visible.map((item) => {
+          const Icon = item.icon;
+          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          return (
+            <Link key={item.href} href={item.href} className={`sidebar-nav-item ${active ? "active" : ""}`} title={collapsed ? item.label : undefined} aria-current={active ? "page" : undefined}>
+              <Icon size={14} aria-hidden />
+              {!collapsed && <span>{item.label}</span>}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div style={{ padding: "var(--space-2)", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 2 }}>
+        <button className="sidebar-nav-item" onClick={() => setTheme(resolved === "dark" ? "light" : "dark")} title="Toggle theme">
+          {resolved === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+          {!collapsed && <span>{resolved === "dark" ? "Light mode" : "Dark mode"}</span>}
+        </button>
+        {!collapsed && (
+          <div style={{ padding: "6px var(--space-3)", fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
+            <div style={{ fontWeight: 500, color: "var(--text-secondary)" }}>{user.name}</div>
+            <div style={{ textTransform: "capitalize" }}>{user.role === "user" ? "Employee" : user.role}</div>
+          </div>
         )}
+        <button className="sidebar-nav-item" onClick={logout} title="Sign out">
+          <LogOut size={14} />
+          {!collapsed && <span>Sign out</span>}
+        </button>
       </div>
     </aside>
   );

@@ -1,207 +1,154 @@
-# GearGuard – Intelligent Asset Maintenance Platform
+# ⚙️ GearGuard – Intelligent Industrial Asset Maintenance & Telemetry ERP
 
-GearGuard is a centralized industrial asset intelligence and maintenance management platform inspired by enterprise ERPs like Odoo. It bridges physical machinery, plant technicians, managers, and repair workflows—streamlining breakdown resolution, scheduling preventive maintenance, tracking equipment lifecycles, and delivering actionable operational analytics.
-
----
-
-## 📺 Project Demo
-
-Watch the complete walkthrough of GearGuard:  
-🎥 **[View Loom Video Demo](https://www.loom.com/share/cf38a46e897c4508a00ad83d5d006aff)**
+> **Empowering Modern Smart Factories with Zero-Unplanned-Downtime Reliability.**  
+> Inspired by enterprise ERPs like Odoo, GearGuard bridges physical plant machinery, shopfloor technicians, department superintendents, and reliability engineering workflows into a cohesive, high-performance web platform.
 
 ---
 
-## 🚀 Key Features
-
-* **Smart Equipment Catalog**: Centralized inventory tracking with serial numbers, warranty dates, technician assignments, category tags, and work-center locations.
-* **Kanban Workflow Board**: Interactive board to transition maintenance requests across stages (`New Request`, `In Progress`, `Repaired`, `Scrap`).
-* **Preventive & Corrective Maintenance**: Track unscheduled emergency breakdowns and automate scheduled recurring maintenance cycles.
-* **Odoo-Style "Smart Buttons"**: Direct quick-access buttons on equipment detail forms displaying live badge counts of active requests, maintenance history, and audit records.
-* **Interactive Maintenance Calendar**: Visual timeline and calendar scheduler for technician assignments and recurring checkups.
-* **Analytics & Performance Reporting**: Real-time MTTR (Mean Time to Repair), MTBF (Mean Time Between Failures), downtime expense distribution, and high-risk equipment charts.
-* **Role-Based Access Control (RBAC)**: Tailored dashboards and permissions for **Admin**, **Manager**, **Technician**, **Operator**, and **Auditor**.
-* **Audit Trail**: Tamper-evident logging of status transitions, equipment allocations, and technician actions.
+## 📺 Project Walkthrough
+🎥 **[Watch the Loom Video Demo](https://www.loom.com/share/cf38a46e897c4508a00ad83d5d006aff)**
 
 ---
 
-## 🛠️ Tech Stack
+## 🌟 What's New in v2.0 Enterprise
 
-### Frontend
-* **Framework**: [Next.js](https://nextjs.org/) (App Router, React 19)
+* **🚀 Modern Interactive Landing Page**: A landing page at `http://localhost:3000` with live plant telemetry indicators, an interactive 6-department explorer, and **1-Click Demo Login Launchpads** for instant role switching without typing credentials.
+* **🏭 6 Industrial Plant Divisions**: Full departmental isolation across **Machining**, **Production**, **Assembly**, **Facilities**, **Logistics**, and **Quality Control**.
+* **✨ Frosted-Glass Modal Popups**: Centered dialog overlays with backdrop blur (`backdrop-filter: blur(8px)`) and spring pop-in animations across all creation forms, complaint tickets, and deletion confirmations.
+* **📦 81 Pre-Configured Enterprise Assets**: CNC 5-axis mills, robotic articulated arms, heavy press brakes, industrial boilers, reach pickers, and CMM metrology stations.
+* **📋 110 Historical & Active Work Orders**: High-density timeline of breakdown complaints, preventive calibrations, and technician repair durations.
+* **🔐 Strict Departmental RBAC**: Machine department complaints and asset requests are strictly scoped to their respective department managers (e.g., Machining Manager only sees Machining issues).
+
+---
+
+## 🚀 Key Modules & Architecture
+
+* **Command Center & Fleet Telemetry**: Real-time MTTR (Mean Time to Repair), MTBF (Mean Time Between Failures), downtime expense distribution, and high-risk equipment alerts calculated via aggregation pipelines.
+* **Shopfloor Work Queue & Kanban**: Drag-and-drop tickets across `New Request` ➔ `In Progress` ➔ `Repaired` or `Scrap`, complete with live technician repair timers and resolution logs.
+* **Smart Equipment Catalog & Odoo Buttons**: Deep serial tracking, warranty dates, location mapping, and live badge counters linking maintenance histories directly on equipment forms.
+* **Machine Custody & Storage Return**: Self-service machine checkout for plant operators, department manager budget approvals, and custody return handovers.
+* **Operator Complaint Triage**: Operators report equipment malfunctions directly from their mobile/desktop terminals with severity ratings and component failure descriptions.
+* **Tamper-Evident Audit Ledger**: Immutable compliance trail capturing user IDs, timestamps, entity diffs, state transitions, and technician leaderboards.
+
+---
+
+## 🛠️ Technology Stack
+
+### Frontend Tier
+* **Framework**: [Next.js 16](https://nextjs.org/) (App Router, React 19)
 * **Language**: TypeScript
-* **Styling**: Tailwind CSS
-* **UI Components**: Radix UI & Shadcn UI
-* **State & Data Fetching**: TanStack Query (React Query)
+* **State & Caching**: TanStack React Query v5
+* **Styling**: Vanilla CSS Design Tokens with Dark/Light Theme Switching
+* **UI Components**: Radix UI Primitives, Lucide React Icons
 * **Data Visualization**: Recharts
-* **Icons**: Lucide React
 
-### Backend
-* **Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Python 3.10+)
-* **ASGI Server**: [Uvicorn](https://www.uvicorn.org/)
-* **Database**: MongoDB (Atlas / Local)
-* **ODM**: [Beanie](https://beanie-odm.dev/) & [Motor](https://motor.readthedocs.io/) (Async MongoDB driver)
-* **Validation**: Pydantic v2
-* **Authentication**: JWT & Role-Based Access Control
+### Backend Tier
+* **Framework**: [FastAPI 2.0](https://fastapi.tiangolo.com/) (Python 3.10+)
+* **Database Driver**: [Motor](https://motor.readthedocs.io/) (Async MongoDB Driver)
+* **ODM**: [Beanie ODM](https://beanie-odm.dev/) (Pydantic v2 document models)
+* **Security & Auth**: JWT in secure HTTP-only cookies, SlowAPI rate limiting, Argon2/BCrypt hashing
+* **Interactive Docs**: Swagger UI (`/api/docs`) & OpenAPI 3.1
 
 ---
 
-## 📋 Prerequisites
+## ⚡ Quick Start: Running GearGuard Locally
 
-Before running the application, ensure you have the following installed:
-* **Node.js** (v18.0 or newer) & **npm**
-* **Python** (v3.10 or newer)
-* **MongoDB** (A free [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) cluster connection string or a local MongoDB server)
-
----
-
-## ⚡ Quick Start: Running the Project
-
-To run GearGuard locally, you will start the **Backend** (`port 3001`) and the **Frontend** (`port 3000`) in two separate terminal windows.
-
----
+GearGuard runs with the **FastAPI Backend** on port `3001` and the **Next.js Frontend** on port `3000`.
 
 ### 1️⃣ Start the Backend (FastAPI)
 
-#### **Step 1: Open a terminal in `gearguard-backend`**
 ```bash
 cd gearguard-backend
-```
 
-#### **Step 2: Create & activate a Python Virtual Environment**
+# 1. Create and activate a Python virtual environment
+python -m venv venv
 
-* **On Windows (PowerShell / Command Prompt):**
-  ```powershell
-  python -m venv venv
-  .\venv\Scripts\activate
-  ```
+# Windows PowerShell:
+.\venv\Scripts\activate
 
-* **On macOS / Linux:**
-  ```bash
-  python3 -m venv venv
-  source venv/bin/activate
-  ```
+# macOS / Linux:
+source venv/bin/activate
 
-#### **Step 3: Install dependencies**
-```bash
+# 2. Install dependencies
 pip install -r requirements.txt
-```
 
-#### **Step 4: Configure environment variables**
-Verify or create a `.env` file inside `gearguard-backend/`:
-```env
-DATABASE_URL=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/gearguard?retryWrites=true&w=majority
-JWT_SECRET=your_secret_key_here
-PORT=3001
-```
+# 3. Configure .env (ensure MongoDB Atlas connection string is set)
+# DATABASE_URL=mongodb+srv://...
+# PORT=3001
 
-#### **Step 5: (Optional) Seed the database with demo presentation data**
-To populate demo equipment, categories, locations, users, and maintenance requests:
-```bash
-python database.py
-```
+# 4. (Recommended) Seed database with 81 assets, 47 users, and 110 work orders
+python -m app.seed
 
-#### **Step 6: Start the backend server**
-```bash
-# Using uvicorn with hot-reload:
-uvicorn main:app --reload --port 3001
-
-# Or run via Python directly:
+# 5. Start the backend server
 python main.py
 ```
 
-* **Backend API Base URL**: `http://localhost:3001`
-* **Interactive Swagger API Docs**: [http://localhost:3001/docs](http://localhost:3001/docs)
-* **ReDoc API Docs**: [http://localhost:3001/redoc](http://localhost:3001/redoc)
+* **API Base URL**: `http://localhost:3001`
+* **Interactive Swagger Docs**: [http://localhost:3001/api/docs](http://localhost:3001/api/docs)
+* **OpenAPI Schema**: [http://localhost:3001/api/openapi.json](http://localhost:3001/api/openapi.json)
 
 ---
 
 ### 2️⃣ Start the Frontend (Next.js)
 
-#### **Step 1: Open a second terminal in `gearguard-frontend`**
+Open a second terminal window:
+
 ```bash
 cd gearguard-frontend
-```
 
-#### **Step 2: Install npm dependencies**
-```bash
+# 1. Install npm packages
 npm install
-```
 
-#### **Step 3: Start the Next.js development server**
-```bash
+# 2. Start development server
 npm run dev
 ```
 
-* **Frontend Web Application**: [http://localhost:3000](http://localhost:3000)
-
-> **Note**: The frontend connects to the backend API at `http://localhost:3001/api` by default (defined in `src/lib/api.ts`).
+* **Frontend Web App & Landing Page**: [http://localhost:3000](http://localhost:3000)
+* **Direct Operator Sign In**: [http://localhost:3000/login](http://localhost:3000/login)
 
 ---
 
-## 👥 Demo Accounts (Pre-configured)
+## 👥 Demo Personas & Test Credentials
 
-If you seeded the database using `python database.py`, you can test different role perspectives using the following credentials:
+> **Master Password for ALL Demo Accounts:**  
+> ### `password123`
 
-| Role | Email | Password | Access Highlights |
+For testing different operational perspectives, use the pre-configured accounts below:
+
+| Role | Email | Password | Scope & Access Highlights |
 | :--- | :--- | :--- | :--- |
-| **Admin** | `admin@gearguard.com` | `password123` | Full system access, team & user management, equipment creation |
-| **Manager** | `manager@gearguard.com` | `password123` | Asset approvals, maintenance request triage, analytics dashboard |
-| **Technician** | `tech@gearguard.com` | `password123` | Kanban task transitions, request updates, time tracking |
-| **Operator** | `employee@gearguard.com` | `password123` | Asset breakdown reporting, self-service maintenance requests |
-| **Auditor** | `auditor@gearguard.com` | `password123` | Read-only compliance audits, system log inspections, reports |
+| **Super Admin** | `admin@gearguard.com` | `password123` | Plant-wide unconstrained access, staff registry, category & location management. |
+| **Machining Manager** | `manager.machining@gearguard.com` | `password123` | Machining division oversight, CNC spindle work orders, asset procurement approvals. |
+| **Production Manager** | `manager.production@gearguard.com` | `password123` | Press & laser cutting oversight, complaint inbox triage, plant MTTR metrics. |
+| **Production Technician** | `tech.production@gearguard.com` | `password123` | Active breakdown queue, Kanban transitions, repair timer logging. |
+| **Plant Operator** | `priyanshuc675@gmail.com` | `password123` | Assigned press brakes & laser cutters, breakdown reporting, custody returns. |
+| **Standard Operator** | `employee@gearguard.com` | `password123` | Chemical pumps & injection molders self-service, complaint submission. |
+| **Compliance Auditor** | `auditor@gearguard.com` | `password123` | Read-only inspection of tamper-evident audit logs, calibration records, and ledger. |
+
+> 📖 **Full Credentials Directory**: For the complete directory of all 47 demo accounts across all 6 departments with assigned machinery and test workflows, see **[CREDENTIALS.md](./CREDENTIALS.md)**.
 
 ---
 
-## 📂 Project Architecture
+## 🔄 Core Operational Workflow
 
-```plaintext
-GearGuard-odoo-virtual-/
-├── gearguard-backend/            # FastAPI Python backend
-│   ├── main.py                   # Application entry point & router mounting
-│   ├── database.py               # MongoDB initialization & Beanie models setup / seeder
-│   ├── models.py                 # Beanie ODM document models
-│   ├── schemas.py                # Pydantic request/response schemas
-│   ├── audit_helper.py           # Helper for audit trail logs
-│   ├── requirements.txt          # Python dependencies
-│   ├── .env                      # Database connection and environment variables
-│   └── routers/                  # Modular API endpoints
-│       ├── auth.py               # Authentication & login
-│       ├── users.py              # User management
-│       ├── equipment.py          # Equipment catalog & smart button stats
-│       ├── requests.py           # Maintenance request lifecycle & Kanban
-│       ├── maintenance.py        # Preventive maintenance calendar
-│       ├── categories.py         # Equipment classifications
-│       ├── locations.py          # Plant facilities & work centers
-│       ├── asset_requests.py     # New asset procurement requests
-│       ├── audit_logs.py         # Compliance audit trails
-│       └── reports.py            # Analytics (MTTR, MTBF, failure rates)
-│
-├── gearguard-frontend/           # Next.js 16 App Router frontend
-│   ├── src/
-│   │   ├── app/                  # Next.js pages (dashboard, kanban, equipment, etc.)
-│   │   ├── components/           # Reusable UI & Shadcn components
-│   │   ├── context/              # React context providers (AuthContext, etc.)
-│   │   └── lib/                  # API client (`api.ts`), utilities
-│   ├── package.json              # Node dependencies & scripts
-│   └── tsconfig.json             # TypeScript configuration
-│
-└── README.md                     # Project documentation
+```mermaid
+graph TD
+    A[Plant Operator] -->|1. Reports Breakdown / Complaint| B(Department Triage Inbox)
+    B -->|2. Department Manager Reviews & Prioritizes| C{Maintenance Team}
+    C -->|3. Dispatched to Assigned Technician| D[Kanban Board / Work Queue]
+    D -->|4. Technician Logs Timer & Repair Notes| E[Repaired / Scrap State]
+    E -->|5. Auto-sync Service Date / Scrap Flag| F[Live Fleet Telemetry & MTTR]
+    E -->|6. Tamper-evident Audit Entry Logged| G[Compliance Ledger]
 ```
 
----
-
-## 🔄 Core Workflow
-
-1. **Register Equipment**: Register machines with serial numbers, warranty terms, work-center locations, and assigned maintenance teams.
-2. **Log Maintenance Request**: Create a Corrective breakdown report or schedule a routine Preventive checkup.
-3. **Kanban Lifecycle**: Drag & drop tasks across stages: `New Request` ➔ `In Progress` ➔ `Repaired` or `Scrap`.
-4. **Automated Status Sync**:
-   * Moving a task to **Repaired** automatically updates the machine's `last_maintenance_date`.
-   * Moving a task to **Scrap** marks the equipment unusable and flags it across inventory.
-5. **Analytics & Continuous Improvement**: Review MTTR, breakdown frequencies, and team efficiency in the Reporting dashboard to optimize plant reliability.
+1. **Breakdown Reporting**: An operator on the factory floor notices pressure drop on an assigned press brake and files a complaint with high severity.
+2. **Departmental Scoping**: The ticket routes strictly to that specific division manager for review and technician dispatch.
+3. **Kanban Lifecycle**: The technician drags the card to *In Progress*, records diagnostic comments, and completes the work.
+4. **Automated State Synchronization**: Setting the ticket to *Repaired* automatically updates the asset's `last_service_date`. If marked *Scrap*, the equipment is flagged unusable plant-wide.
+5. **Continuous Intelligence**: The Command Center updates MTTR and MTBF charts in real-time, providing actionable reliability metrics to plant leadership.
 
 ---
 
 ## 📜 License
 
-This project was built for educational and demonstration purposes.
+This project was built for educational and demonstration purposes. All rights reserved.

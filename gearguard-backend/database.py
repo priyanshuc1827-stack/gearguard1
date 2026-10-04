@@ -11,9 +11,13 @@ AsyncIOMotorClient.append_metadata = dummy_append_metadata
 
 async def init_db(database_url: str):
     client = AsyncIOMotorClient(database_url)
-    db = client.get_default_database()
+    try:
+        db = client.get_default_database()
+    except Exception:
+        db = None
     if db is None or db.name == "admin":
-        db = client["gearguard"]
+        db_name = os.getenv("DATABASE_NAME", "gearguard")
+        db = client[db_name]
     
     await init_beanie(
         database=db,

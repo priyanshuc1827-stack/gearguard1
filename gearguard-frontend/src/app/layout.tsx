@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
-import Providers from "./providers";
-import Sidebar from "@/components/custom/sidebar";
-
-const inter = Inter({ subsets: ["latin"] });
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "GearGuard | Asset Maintenance",
-  description: "Mission-critical industrial asset tracking and maintenance management",
+  title: "GearGuard — Equipment Management",
+  description: "Maintenance work orders and asset allocation for industrial operations.",
 };
 
 export default function RootLayout({
@@ -17,18 +15,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className={inter.className}>
-        <Providers>
-          <div className="flex h-screen overflow-hidden" style={{ background: "var(--background)" }}>
-            {/* Sidebar hidden on landing + auth pages via its own logic */}
-            <Sidebar />
-            {/* Main content — full width when sidebar is hidden */}
-            <main className="flex-1 overflow-y-auto">
-              {children}
-            </main>
-          </div>
-        </Providers>
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${GeistSans.variable} ${GeistMono.variable}`}
+        style={
+          {
+            "--font-geist-sans": GeistSans.style.fontFamily,
+            "--font-mono": GeistMono.style.fontFamily,
+          } as React.CSSProperties
+        }
+      >
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

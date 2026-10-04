@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Keep Turbopack scoped to this app when the repository has other lockfiles.
-  turbopack: {
-    root: process.cwd(),
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1",
   },
 };
 
