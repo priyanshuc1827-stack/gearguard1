@@ -15,6 +15,7 @@ import asyncio
 import random
 import sys
 from datetime import datetime, timedelta, timezone
+from typing import cast
 
 from app.core.config import get_settings
 from app.core.database import init_db
@@ -29,6 +30,7 @@ from app.models.category import Category
 from app.models.location import Location
 from app.models.team import Team
 from app.models.counter import Counter
+from app.models.audit_inspection import AuditInspection, ChecklistItem
 
 
 DEPARTMENTS = ["Machining", "Production", "Assembly", "Facilities", "Logistics", "Quality Control"]
@@ -233,7 +235,7 @@ async def seed_database():
 
     # Drop existing collections completely
     print("Dropping existing collections...")
-    for model in [User, Equipment, WorkOrder, AssetRequest, AuditLog, Category, Location, Team, Counter]:
+    for model in [User, Equipment, WorkOrder, AssetRequest, AuditLog, Category, Location, Team, Counter, AuditInspection]:
         await model.get_motor_collection().drop()
     print("All collections dropped clean.")
 
@@ -936,6 +938,170 @@ async def seed_database():
             after=after_dict,
             timestamp=t_stamp,
         ).insert()
+
+    # 7. Seed Initial Compliance Audit Inspections for Auditors
+    print("Seeding Compliance Audit Inspections across departments...")
+    all_users = await User.find_all().to_list()
+    user_by_email = {u.email: u for u in all_users}
+    all_equipments = await Equipment.find_all().to_list()
+    eq_by_name = {e.name: e for e in all_equipments}
+
+    auditor_seeds = [
+        # Production (Nathan Drake)
+        {
+            "auditor_email": "auditor.production@gearguard.com",
+            "equipment_name": "Cincinnati 175-Ton Hydraulic Press Brake",
+            "standard": "OSHA 1910",
+            "status": "passed",
+            "score": 98,
+            "findings": "Hydraulic ram synchronization verified within 0.05mm. Emergency stop dual-circuit trip tested under 140ms. Light curtains aligned.",
+            "checklist": [
+                {"item": "Emergency Stop buttons and pull-cords fully operational (<200ms trip)", "passed": True, "notes": "Measured 140ms"},
+                {"item": "Point-of-operation safety light curtains and physical interlocks aligned", "passed": True, "notes": "Dual infrared emitter verified"},
+                {"item": "Electrical enclosures locked and lockout/tagout (LOTO) points labeled", "passed": True, "notes": "Placards intact"},
+                {"item": "Pneumatic and hydraulic pressure relief valves tested and tagged", "passed": True, "notes": "Tagged calibration exp 2027"},
+                {"item": "Mandatory PPE, arc flash, and pinch-point caution placards visible", "passed": True, "notes": "Clean high-visibility signs"},
+            ],
+            "days_ago": 3,
+            "next_days": 87,
+        },
+        {
+            "auditor_email": "auditor.production@gearguard.com",
+            "equipment_name": "Trumpf TruLaser 3030 Fiber Laser Cutter",
+            "standard": "ISO 9001:2015",
+            "status": "passed",
+            "score": 95,
+            "findings": "Laser resonator power stability at 99.4%. Assist gas pressure regulator verified. Focus lens optics clean and free of spatter.",
+            "checklist": [
+                {"item": "Calibration tolerances within allowable limits (Gauge R&R)", "passed": True, "notes": "Beam waist focused at 0.12mm"},
+                {"item": "Preventive maintenance schedule followed with zero overdue cycles", "passed": True, "notes": "500hr service logged"},
+                {"item": "Tool wear tracking and spindle vibration baseline acceptable", "passed": True, "notes": "Axis linear guides lubricated"},
+                {"item": "Operator shift logbook and sign-offs fully maintained", "passed": True, "notes": "Complete operator logs"},
+                {"item": "Manufacturer operating limits and duty cycle respected", "passed": True, "notes": "Chiller loop temp 18.5C"},
+            ],
+            "days_ago": 12,
+            "next_days": 78,
+        },
+        # Machining (Grace Hopper)
+        {
+            "auditor_email": "auditor.machining@gearguard.com",
+            "equipment_name": "Haas VF-4 5-Axis CNC Mill",
+            "standard": "ISO 9001:2015",
+            "status": "passed",
+            "score": 97,
+            "findings": "Ballbar circularity test achieved 0.003mm roundness. Spindle vibration analysis under 0.8 mm/s RMS. Coolant pH tested at 8.8.",
+            "checklist": [
+                {"item": "Calibration tolerances within allowable limits (Gauge R&R)", "passed": True, "notes": "Gauge R&R variance 4.2%"},
+                {"item": "Preventive maintenance schedule followed with zero overdue cycles", "passed": True, "notes": "Way lube reservoir filled"},
+                {"item": "Tool wear tracking and spindle vibration baseline acceptable", "passed": True, "notes": "0.8 mm/s vibration baseline"},
+                {"item": "Operator shift logbook and sign-offs fully maintained", "passed": True, "notes": "Machinist Jane Doe signed"},
+                {"item": "Manufacturer operating limits and duty cycle respected", "passed": True, "notes": "Within rated 12,000 RPM range"},
+            ],
+            "days_ago": 5,
+            "next_days": 85,
+        },
+        {
+            "auditor_email": "auditor.machining@gearguard.com",
+            "equipment_name": "Mazak Quick Turn 250 Lathe",
+            "standard": "OSHA 1910",
+            "status": "conditional",
+            "score": 82,
+            "findings": "Minor hydraulic chuck pressure fluctuation noted during rapid unclamp cycle. Interlock operational but chuck guard spring shows slight fatigue.",
+            "checklist": [
+                {"item": "Emergency Stop buttons and pull-cords fully operational (<200ms trip)", "passed": True, "notes": "170ms trip"},
+                {"item": "Point-of-operation safety light curtains and physical interlocks aligned", "passed": False, "notes": "Guard spring tension reduced by 15%"},
+                {"item": "Electrical enclosures locked and lockout/tagout (LOTO) points labeled", "passed": True, "notes": "Properly locked"},
+                {"item": "Pneumatic and hydraulic pressure relief valves tested and tagged", "passed": True, "notes": "Operating within 35 bar"},
+                {"item": "Mandatory PPE, arc flash, and pinch-point caution placards visible", "passed": True, "notes": "Clear placards"},
+            ],
+            "days_ago": 8,
+            "next_days": 30,
+        },
+        # Quality Control (Arthur Dent)
+        {
+            "auditor_email": "auditor@gearguard.com",
+            "equipment_name": "Zeiss Contura 3D Coordinate Measuring Machine",
+            "standard": "IEC 17025",
+            "status": "passed",
+            "score": 100,
+            "findings": "Metrology cleanroom ISO Class 7 verified. Traceable ceramic sphere probe calibration error <0.8 microns. Temperature steady at 20.0C.",
+            "checklist": [
+                {"item": "Primary sensor drift within ±0.005% of reference standard", "passed": True, "notes": "Calibrated with Renishaw gold artifact"},
+                {"item": "Environmental cleanroom temperature (20±1°C) and humidity verified", "passed": True, "notes": "20.1C / 44% RH"},
+                {"item": "Traceable calibration master artifacts logged with NIST/NABL certs", "passed": True, "notes": "NIST Master Traceability Valid"},
+                {"item": "Thermal expansion compensation algorithm validated", "passed": True, "notes": "Real-time probe compensation verified"},
+                {"item": "Anti-vibration foundation isolation pads checked for degradation", "passed": True, "notes": "Air damping system pressurized"},
+            ],
+            "days_ago": 2,
+            "next_days": 88,
+        },
+        # Facilities (Emma Watson)
+        {
+            "auditor_email": "auditor.facilities@gearguard.com",
+            "equipment_name": "Cleaver-Brooks 250 HP Industrial Steam Boiler",
+            "standard": "ISO 14001:2015",
+            "status": "passed",
+            "score": 94,
+            "findings": "Flue gas analysis confirms NOx and CO within EPA Tier 4 requirements. Blowdown heat recovery operating at 82% thermal efficiency.",
+            "checklist": [
+                {"item": "Zero hazardous lubricant or hydraulic oil drips in catch basins", "passed": True, "notes": "Catch pans dry"},
+                {"item": "Coolant filtration and closed-loop recirculator functioning normally", "passed": True, "notes": "Blowdown bypass normal"},
+                {"item": "Fume extraction and dust collector differential pressure in range", "passed": True, "notes": "Stack sensor calibrated"},
+                {"item": "Emergency spill containment kit stocked and accessible within 15 meters", "passed": True, "notes": "Full spill kit inspected"},
+                {"item": "Hazardous waste and oil disposal manifest up to date", "passed": True, "notes": "Annual emissions permit valid"},
+            ],
+            "days_ago": 6,
+            "next_days": 84,
+        },
+    ]
+
+    for idx, s in enumerate(auditor_seeds):
+        aud_user = user_by_email.get(s["auditor_email"])
+        eq = eq_by_name.get(s["equipment_name"])
+        if not aud_user or not eq:
+            continue
+
+        c_seq = idx + 1
+        h_id = f"AUD-{1000 + c_seq}"
+        dept_code = "".join([w[0] for w in eq.department.split()]).upper()
+        c_num = f"CERT-2026-{dept_code}-{1000 + c_seq}"
+        insp_time = now - timedelta(days=s["days_ago"])
+        next_due = now + timedelta(days=s["next_days"])
+
+        insp = AuditInspection(
+            human_id=h_id,
+            certificate_number=c_num,
+            department=eq.department,
+            equipment_id=eq.id,
+            equipment_name=eq.name,
+            equipment_human_id=eq.human_id,
+            equipment_serial=eq.serial_number,
+            auditor_id=aud_user.id,
+            auditor_name=aud_user.name,
+            auditor_email=aud_user.email,
+            standard=s["standard"],
+            status=s["status"],
+            score=s["score"],
+            checklist=[ChecklistItem(**c) for c in cast(list[dict], s["checklist"])],
+            findings=s["findings"],
+            next_audit_due=next_due,
+            created_at=insp_time,
+        )
+        await insp.insert()
+
+        eq.last_audit_date = insp_time
+        eq.audit_status = s["status"]
+        eq.next_audit_due = next_due
+        await eq.save()
+
+    # Mark counter
+    insp_counter = await Counter.find_one(Counter.name == "audit_inspection")
+    if not insp_counter:
+        insp_counter = Counter(name="audit_inspection", seq=len(auditor_seeds))
+        await insp_counter.insert()
+    else:
+        insp_counter.seq = max(insp_counter.seq, len(auditor_seeds))
+        await insp_counter.save()
 
     print("\n=======================================================")
     print("SUCCESS: GearGuard database fully populated with real-time enterprise operations data!")

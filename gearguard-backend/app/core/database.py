@@ -20,12 +20,14 @@ async def init_db() -> None:
     from app.models.asset_request import AssetRequest
     from app.models.audit_log import AuditLog
     from app.models.counter import Counter
+    from app.models.audit_inspection import AuditInspection
 
     await init_beanie(
         database=client[cfg.DATABASE_NAME],
         document_models=[
             User, Team, Equipment, WorkOrder,
             Category, Location, AssetRequest, AuditLog, Counter,
+            AuditInspection,
         ],
         allow_index_dropping=True,
     )

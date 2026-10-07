@@ -36,6 +36,7 @@ async def _out(req: AssetRequest) -> AssetRequestOut:
         allocated_asset_department=asset.department if asset else None,
         request_date=req.request_date,
         approval_date=req.approval_date,
+        rejection_date=getattr(req, "rejection_date", None),
         allocated_date=req.allocated_date,
         return_date=req.return_date,
     )
@@ -50,13 +51,13 @@ async def list_requests(
         reqs = await AssetRequest.find(
             AssetRequest.employee_id == PydanticObjectId(current.user_id)
         ).sort("-request_date").to_list()
-    elif current.role == UserRole.manager:
+    elif current.role in (UserRole.manager, UserRole.auditor):
         user = await User.get(PydanticObjectId(current.user_id))
-        mgr_dept = getattr(user, "department", None) if user else None
-        if mgr_dept and mgr_dept != "All":
-            dept_users = await User.find(User.department == mgr_dept).to_list()
+        scoped_dept = getattr(user, "department", None) if user else None
+        if scoped_dept and scoped_dept != "All":
+            dept_users = await User.find(User.department == scoped_dept).to_list()
             dept_uids = [u.id for u in dept_users]
-            dept_eqs = await Equipment.find(Equipment.department == mgr_dept).to_list()
+            dept_eqs = await Equipment.find(Equipment.department == scoped_dept).to_list()
             dept_eq_ids = [e.id for e in dept_eqs]
             reqs = await AssetRequest.find({
                 "$or": [
@@ -66,7 +67,7 @@ async def list_requests(
             }).sort("-request_date").to_list()
         else:
             reqs = await AssetRequest.find_all().sort("-request_date").to_list()
-    else:  # Admin / Auditor
+    else:  # Admin
         if department and department != "All":
             dept_users = await User.find(User.department == department).to_list()
             dept_uids = [u.id for u in dept_users]
@@ -125,6 +126,7 @@ async def approve(req_id: str, current: TokenData = Depends(require("admin", "ma
 async def reject(req_id: str, current: TokenData = Depends(require("admin", "manager"))):
     req = await _get_req(req_id)
     req.status = AssetRequestStatus.rejected
+    req.rejection_date = datetime.now(tz=timezone.utc)
     await req.save()
     actor = await User.get(PydanticObjectId(current.user_id))
     await audit(actor_id=current.user_id, actor_name=actor.name if actor else "Unknown",

@@ -15,7 +15,7 @@ from app.core.database import init_db
 from app.routers import (
     auth, users, equipment, work_orders,
     asset_requests, teams, categories, locations,
-    audit_logs, reports,
+    audit_logs, reports, compliance,
 )
 
 
@@ -70,6 +70,7 @@ for pfx in [PREFIX, "/api"]:
     app.include_router(locations.router, prefix=pfx)
     app.include_router(audit_logs.router, prefix=pfx)
     app.include_router(reports.router, prefix=pfx)
+    app.include_router(compliance.router, prefix=pfx)
 
 
 @app.get("/")
@@ -78,5 +79,7 @@ def root():
 
 
 @app.get("/api/health")
+@app.get("/api/v1/health")
 def health():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "service": "gearguard", "version": "2.0.0"}
+

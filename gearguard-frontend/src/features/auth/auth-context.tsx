@@ -61,7 +61,7 @@ export function roleHome(role: UserRole): string {
     case "manager":   return "/dashboard";
     case "technician": return "/my-work";
     case "user":       return "/complaints";
-    case "auditor":    return "/ledger";
+    case "auditor":    return "/compliance";
     default:           return "/login";
   }
 }

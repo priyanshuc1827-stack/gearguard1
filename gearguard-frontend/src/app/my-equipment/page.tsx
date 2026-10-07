@@ -168,8 +168,18 @@ export default function MyEquipmentPage() {
           </div>
 
           {assetsLoading ? (
-            <div className="card" style={{ padding: 20 }}>
-              <SkeletonRows rows={3} cols={6} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 14 }}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="card" style={{ padding: "16px 18px", minHeight: 180, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div className="skeleton" style={{ height: 18, width: 80, borderRadius: "var(--radius-sm)" }} />
+                  <div className="skeleton" style={{ height: 20, width: "65%", borderRadius: "var(--radius-sm)" }} />
+                  <div className="skeleton" style={{ height: 14, width: "40%", borderRadius: "var(--radius-sm)" }} />
+                  <div style={{ marginTop: "auto", display: "flex", gap: 8 }}>
+                    <div className="skeleton" style={{ height: 32, flex: 1, borderRadius: "var(--radius-sm)" }} />
+                    <div className="skeleton" style={{ height: 32, flex: 1, borderRadius: "var(--radius-sm)" }} />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : assignedList.length === 0 ? (
             <div className="card" style={{ padding: "36px 20px", textAlign: "center" }}>

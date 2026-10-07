@@ -28,6 +28,44 @@ async def list_audit_logs(
         except Exception:
             pass
 
+    # Department Scoping for Auditors
+    if current.role == "auditor":
+        from app.models.user import User
+        from app.models.equipment import Equipment
+        from app.models.work_order import WorkOrder
+        from beanie import PydanticObjectId
+
+        current_user = await User.get(PydanticObjectId(current.user_id))
+        auditor_dept = getattr(current_user, "department", None)
+        if auditor_dept and auditor_dept != "All":
+            dept_users = await User.find(User.department == auditor_dept).to_list()
+            dept_uids = [u.id for u in dept_users]
+
+            dept_eqs = await Equipment.find(Equipment.department == auditor_dept).to_list()
+            dept_eq_ids = [str(e.id) for e in dept_eqs]
+            dept_eq_labels = [e.name for e in dept_eqs] + [e.human_id for e in dept_eqs]
+
+            dept_wos = await WorkOrder.find({
+                "$or": [
+                    {"equipment_id": {"$in": [e.id for e in dept_eqs]}},
+                    {"created_by": {"$in": dept_uids}},
+                ]
+            }).to_list()
+            dept_wo_ids = [str(w.id) for w in dept_wos]
+            dept_wo_labels = [w.human_id for w in dept_wos]
+
+            or_clauses = [
+                {"actor_id": {"$in": dept_uids}},
+                {"entity_id": {"$in": dept_eq_ids + dept_wo_ids}},
+                {"entity_label": {"$in": dept_eq_labels + dept_wo_labels}},
+            ]
+            if "$or" in query:
+                query = {"$and": [{"$or": query.pop("$or")}, {"$or": or_clauses}]}
+            elif "$and" in query:
+                query["$and"].append({"$or": or_clauses})
+            else:
+                query["$or"] = or_clauses
+
     total = await AuditLog.find(query).count()
     skip = (page - 1) * page_size
     logs = await AuditLog.find(query).sort("-timestamp").skip(skip).limit(page_size).to_list()

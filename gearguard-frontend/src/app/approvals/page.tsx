@@ -19,6 +19,7 @@ import {
   ArrowRightLeft,
   Calendar,
   Box,
+  X,
 } from "lucide-react";
 
 function formatDateTime(dateStr: string | null) {
@@ -49,13 +50,334 @@ function getDurationStr(startDateStr: string | null, endDateStr: string | null) 
   return `${Math.max(1, diffMins)} mins`;
 }
 
+function matchesDateRange(dateStr: string | null | undefined, startDate: string, endDate: string) {
+  if (!startDate && !endDate) return true;
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+
+  if (startDate) {
+    const start = new Date(startDate + "T00:00:00");
+    if (d < start) return false;
+  }
+  if (endDate) {
+    const end = new Date(endDate + "T23:59:59.999");
+    if (d > end) return false;
+  }
+  return true;
+}
+
+function formatDateRangeLabel(startDate: string, endDate: string) {
+  if (!startDate && !endDate) return "All Time";
+  const format = (dStr: string) => {
+    const parts = dStr.split("-");
+    if (parts.length !== 3) return dStr;
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  };
+  if (startDate && endDate) {
+    if (startDate === endDate) return format(startDate);
+    return `${format(startDate)} — ${format(endDate)}`;
+  }
+  if (startDate) return `From ${format(startDate)}`;
+  return `Until ${format(endDate)}`;
+}
+
+function getPresetDates(preset: "all" | "today" | "7days" | "30days" | "thisMonth") {
+  if (preset === "all") return { start: "", end: "" };
+  const today = new Date();
+  const formatYMD = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  const endStr = formatYMD(today);
+
+  if (preset === "today") {
+    return { start: endStr, end: endStr };
+  } else if (preset === "7days") {
+    const past = new Date(today);
+    past.setDate(past.getDate() - 6);
+    return { start: formatYMD(past), end: endStr };
+  } else if (preset === "30days") {
+    const past = new Date(today);
+    past.setDate(past.getDate() - 29);
+    return { start: formatYMD(past), end: endStr };
+  } else if (preset === "thisMonth") {
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { start: formatYMD(firstDay), end: endStr };
+  }
+  return { start: "", end: "" };
+}
+
+function DateRangeFilterBar({
+  startDate,
+  endDate,
+  onStartDateChange,
+  onEndDateChange,
+  activePreset,
+  onSelectPreset,
+  onClear,
+  searchQuery,
+  onSearchChange,
+  searchPlaceholder,
+  totalCount,
+  filteredCount,
+  itemLabel,
+}: {
+  startDate: string;
+  endDate: string;
+  onStartDateChange: (d: string) => void;
+  onEndDateChange: (d: string) => void;
+  activePreset: string;
+  onSelectPreset: (preset: "all" | "today" | "7days" | "30days" | "thisMonth") => void;
+  onClear: () => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+  searchPlaceholder: string;
+  totalCount: number;
+  filteredCount: number;
+  itemLabel: string;
+}) {
+  const isFiltered = Boolean(startDate || endDate || searchQuery.trim());
+
+  return (
+    <div
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius)",
+        padding: "12px 16px",
+        marginBottom: "var(--space-4)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      {/* Top Controls */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        {/* Left: Date inputs and Quick Presets */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text)", fontWeight: 600, fontSize: "12px" }}>
+            <Calendar size={14} style={{ color: "var(--accent)" }} />
+            <span>Date Range:</span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="date"
+              aria-label="From date"
+              value={startDate}
+              onChange={(e) => onStartDateChange(e.target.value)}
+              className="input input-sm"
+              style={{
+                width: 135,
+                height: 30,
+                fontSize: "12px",
+                padding: "2px 8px",
+              }}
+            />
+            <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>to</span>
+            <input
+              type="date"
+              aria-label="To date"
+              value={endDate}
+              onChange={(e) => onEndDateChange(e.target.value)}
+              className="input input-sm"
+              style={{
+                width: 135,
+                height: 30,
+                fontSize: "12px",
+                padding: "2px 8px",
+              }}
+            />
+          </div>
+
+          {/* Quick Preset Buttons */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-sm)",
+              padding: 2,
+              gap: 2,
+            }}
+          >
+            {(
+              [
+                { id: "all", label: "All Time" },
+                { id: "today", label: "Today" },
+                { id: "7days", label: "Last 7D" },
+                { id: "30days", label: "Last 30D" },
+                { id: "thisMonth", label: "This Month" },
+              ] as const
+            ).map((p) => {
+              const isActive = activePreset === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onSelectPreset(p.id)}
+                  className={`btn btn-sm ${isActive ? "btn-primary" : "btn-ghost"}`}
+                  style={{
+                    fontSize: "11px",
+                    height: 24,
+                    padding: "0 8px",
+                    borderRadius: "calc(var(--radius-sm) - 1px)",
+                  }}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Clear Button */}
+          {isFiltered && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="btn btn-sm btn-ghost"
+              style={{
+                fontSize: "11px",
+                height: 26,
+                padding: "0 8px",
+                color: "var(--text-muted)",
+              }}
+              title="Reset all filters"
+            >
+              <RotateCcw size={12} />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
+
+        {/* Right: Search Box */}
+        <div style={{ position: "relative", minWidth: 260, flex: "1 1 240px", maxWidth: 340 }}>
+          <Search
+            size={13}
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+            }}
+          />
+          <input
+            type="text"
+            className="input input-sm"
+            placeholder={searchPlaceholder}
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            style={{
+              paddingLeft: 28,
+              paddingRight: searchQuery ? 24 : 8,
+              height: 30,
+              fontSize: "12px",
+              width: "100%",
+            }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => onSearchChange("")}
+              style={{
+                position: "absolute",
+                right: 6,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                fontSize: "12px",
+                padding: "2px",
+              }}
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Status Row */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: "11px",
+          color: "var(--text-muted)",
+          paddingTop: 6,
+          borderTop: "1px solid var(--border)",
+        }}
+      >
+        <div>
+          <span>
+            Showing <strong style={{ color: "var(--text)" }}>{filteredCount}</strong> of{" "}
+            <strong style={{ color: "var(--text)" }}>{totalCount}</strong> {itemLabel}
+            {isFiltered && " (filtered)"}
+          </span>
+        </div>
+
+        {(startDate || endDate) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span
+              className="badge badge-accent"
+              style={{
+                fontSize: "11px",
+                padding: "1px 8px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <Calendar size={11} />
+              <span>{formatDateRangeLabel(startDate, endDate)}</span>
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ApprovalsPage() {
   const toast = useToast();
   const qc = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<"custody" | "pending" | "approved" | "rejected">("custody");
+
+  // Custody tab filter states
   const [custodyFilter, setCustodyFilter] = useState<"all" | "allocated" | "returned">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [custodyStartDate, setCustodyStartDate] = useState("");
+  const [custodyEndDate, setCustodyEndDate] = useState("");
+
+  // Approved tab filter states
+  const [approvedStartDate, setApprovedStartDate] = useState("");
+  const [approvedEndDate, setApprovedEndDate] = useState("");
+  const [approvedSearchQuery, setApprovedSearchQuery] = useState("");
+  const [approvedPreset, setApprovedPreset] = useState<"all" | "today" | "7days" | "30days" | "thisMonth" | "custom">("all");
+
+  // Rejected tab filter states
+  const [rejectedStartDate, setRejectedStartDate] = useState("");
+  const [rejectedEndDate, setRejectedEndDate] = useState("");
+  const [rejectedSearchQuery, setRejectedSearchQuery] = useState("");
+  const [rejectedPreset, setRejectedPreset] = useState<"all" | "today" | "7days" | "30days" | "thisMonth" | "custom">("all");
 
   const [pendingAction, setPendingAction] = useState<{ req: AssetRequest; action: "approve" | "reject" } | null>(null);
   const [allocateTarget, setAllocateTarget] = useState<AssetRequest | null>(null);
@@ -90,6 +412,9 @@ export default function ApprovalsPage() {
     if (custodyFilter === "allocated" && r.status !== "Allocated") return false;
     if (custodyFilter === "returned" && r.status !== "Returned") return false;
 
+    const targetDate = r.status === "Returned" ? (r.return_date || r.allocated_date) : r.allocated_date;
+    if (!matchesDateRange(targetDate, custodyStartDate, custodyEndDate)) return false;
+
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -101,6 +426,67 @@ export default function ApprovalsPage() {
       (r.category && r.category.toLowerCase().includes(q))
     );
   });
+
+  // Filtered approved records
+  const filteredApproved = approved.filter((r) => {
+    const targetDate = r.approval_date || r.request_date;
+    if (!matchesDateRange(targetDate, approvedStartDate, approvedEndDate)) return false;
+
+    if (!approvedSearchQuery.trim()) return true;
+    const q = approvedSearchQuery.toLowerCase();
+    return (
+      (r.asset_name && r.asset_name.toLowerCase().includes(q)) ||
+      (r.employee_name && r.employee_name.toLowerCase().includes(q)) ||
+      (r.employee_email && r.employee_email.toLowerCase().includes(q)) ||
+      (r.category && r.category.toLowerCase().includes(q)) ||
+      (r.reason && r.reason.toLowerCase().includes(q))
+    );
+  });
+
+  // Filtered rejected records
+  const filteredRejected = rejected.filter((r) => {
+    const targetDate = r.rejection_date || r.request_date;
+    if (!matchesDateRange(targetDate, rejectedStartDate, rejectedEndDate)) return false;
+
+    if (!rejectedSearchQuery.trim()) return true;
+    const q = rejectedSearchQuery.toLowerCase();
+    return (
+      (r.asset_name && r.asset_name.toLowerCase().includes(q)) ||
+      (r.employee_name && r.employee_name.toLowerCase().includes(q)) ||
+      (r.employee_email && r.employee_email.toLowerCase().includes(q)) ||
+      (r.category && r.category.toLowerCase().includes(q)) ||
+      (r.reason && r.reason.toLowerCase().includes(q))
+    );
+  });
+
+  // Preset handlers
+  const handleApprovedPreset = (preset: "all" | "today" | "7days" | "30days" | "thisMonth") => {
+    setApprovedPreset(preset);
+    const { start, end } = getPresetDates(preset);
+    setApprovedStartDate(start);
+    setApprovedEndDate(end);
+  };
+
+  const handleClearApproved = () => {
+    setApprovedStartDate("");
+    setApprovedEndDate("");
+    setApprovedSearchQuery("");
+    setApprovedPreset("all");
+  };
+
+  const handleRejectedPreset = (preset: "all" | "today" | "7days" | "30days" | "thisMonth") => {
+    setRejectedPreset(preset);
+    const { start, end } = getPresetDates(preset);
+    setRejectedStartDate(start);
+    setRejectedEndDate(end);
+  };
+
+  const handleClearRejected = () => {
+    setRejectedStartDate("");
+    setRejectedEndDate("");
+    setRejectedSearchQuery("");
+    setRejectedPreset("all");
+  };
 
   // Mutations
   const approveMutation = useMutation({
@@ -335,7 +721,7 @@ export default function ApprovalsPage() {
           <div>
             {/* Filter and Search Bar */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: "var(--space-4)", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 500 }}>Filter View:</span>
                 <div style={{ display: "flex", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: 2 }}>
                   <button
@@ -359,6 +745,38 @@ export default function ApprovalsPage() {
                   >
                     ✓ Returned ({returnedCount})
                   </button>
+                </div>
+
+                {/* Custody Date Range Filter */}
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 4 }}>
+                  <Calendar size={13} style={{ color: "var(--accent)" }} />
+                  <input
+                    type="date"
+                    value={custodyStartDate}
+                    onChange={(e) => setCustodyStartDate(e.target.value)}
+                    className="input input-sm"
+                    style={{ width: 130, height: 26, fontSize: "11px", padding: "0 6px" }}
+                    title="From date"
+                  />
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>to</span>
+                  <input
+                    type="date"
+                    value={custodyEndDate}
+                    onChange={(e) => setCustodyEndDate(e.target.value)}
+                    className="input input-sm"
+                    style={{ width: 130, height: 26, fontSize: "11px", padding: "0 6px" }}
+                    title="To date"
+                  />
+                  {(custodyStartDate || custodyEndDate) && (
+                    <button
+                      onClick={() => { setCustodyStartDate(""); setCustodyEndDate(""); }}
+                      className="btn btn-sm btn-ghost"
+                      style={{ height: 24, padding: "0 6px", fontSize: "11px" }}
+                      title="Clear custody date filter"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -585,8 +1003,30 @@ export default function ApprovalsPage() {
         {activeTab === "approved" && (
           <div>
             <div style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-muted)", marginBottom: "var(--space-3)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-              Approved Requisitions Ready for Equipment Allocation ({approved.length})
+              Approved Requisitions Ready for Equipment Allocation ({filteredApproved.length} of {approved.length})
             </div>
+
+            <DateRangeFilterBar
+              startDate={approvedStartDate}
+              endDate={approvedEndDate}
+              onStartDateChange={(d) => {
+                setApprovedStartDate(d);
+                setApprovedPreset("custom");
+              }}
+              onEndDateChange={(d) => {
+                setApprovedEndDate(d);
+                setApprovedPreset("custom");
+              }}
+              activePreset={approvedPreset}
+              onSelectPreset={handleApprovedPreset}
+              onClear={handleClearApproved}
+              searchQuery={approvedSearchQuery}
+              onSearchChange={setApprovedSearchQuery}
+              searchPlaceholder="Search by asset, employee, email, reason..."
+              totalCount={approved.length}
+              filteredCount={filteredApproved.length}
+              itemLabel="approved requisitions"
+            />
 
             <div className="table-container">
               <table className="data-table">
@@ -595,21 +1035,41 @@ export default function ApprovalsPage() {
                     <th>Employee</th>
                     <th>Requested Asset</th>
                     <th>Category</th>
+                    <th>Reason</th>
                     <th>Approval Date</th>
-                    <th style={{ textAlign: "right" }}>Action</th>
+                    <th style={{ textAlign: "right" }}>Manager Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {reqsLoading ? (
-                    <SkeletonRows cols={5} rows={3} />
+                    <SkeletonRows cols={6} rows={3} />
                   ) : approved.length === 0 ? (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: "center", padding: "36px 16px", color: "var(--text-muted)" }}>
+                      <td colSpan={6} style={{ textAlign: "center", padding: "36px 16px", color: "var(--text-muted)" }}>
                         No approved requests waiting for asset allocation.
                       </td>
                     </tr>
+                  ) : filteredApproved.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: "center", padding: "36px 16px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                          <Calendar size={28} style={{ color: "var(--text-muted)", opacity: 0.6 }} />
+                          <div style={{ fontWeight: 600, color: "var(--text)", fontSize: "14px" }}>
+                            No approved requisitions match the selected date or search filter.
+                          </div>
+                          <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                            {approvedStartDate || approvedEndDate
+                              ? `No records between ${formatDateRangeLabel(approvedStartDate, approvedEndDate)}.`
+                              : "Try adjusting your search criteria."}
+                          </div>
+                          <button className="btn btn-sm btn-primary" onClick={handleClearApproved} style={{ marginTop: 4 }}>
+                            Reset Filter
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   ) : (
-                    approved.map((req) => (
+                    filteredApproved.map((req) => (
                       <tr key={req.id}>
                         <td>
                           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -621,8 +1081,20 @@ export default function ApprovalsPage() {
                         </td>
                         <td style={{ fontWeight: 500 }}>{req.asset_name}</td>
                         <td className="text-secondary">{req.category ?? "General"}</td>
+                        <td className="text-secondary" style={{ maxWidth: 240, fontSize: "12px", lineHeight: 1.4 }}>
+                          {req.reason ?? "Standard operations requisition"}
+                        </td>
                         <td>
-                          <DateCell date={req.approval_date} />
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <span style={{ fontSize: "12px", fontWeight: 500 }}>
+                              {formatDateTime(req.approval_date || req.request_date)}
+                            </span>
+                            {req.request_date && req.approval_date && (
+                              <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>
+                                Req: {new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(req.request_date))}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <button
@@ -648,8 +1120,30 @@ export default function ApprovalsPage() {
         {activeTab === "rejected" && (
           <div>
             <div style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-muted)", marginBottom: "var(--space-3)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-              Rejected Requisitions History ({rejected.length})
+              Rejected Requisitions History ({filteredRejected.length} of {rejected.length})
             </div>
+
+            <DateRangeFilterBar
+              startDate={rejectedStartDate}
+              endDate={rejectedEndDate}
+              onStartDateChange={(d) => {
+                setRejectedStartDate(d);
+                setRejectedPreset("custom");
+              }}
+              onEndDateChange={(d) => {
+                setRejectedEndDate(d);
+                setRejectedPreset("custom");
+              }}
+              activePreset={rejectedPreset}
+              onSelectPreset={handleRejectedPreset}
+              onClear={handleClearRejected}
+              searchQuery={rejectedSearchQuery}
+              onSearchChange={setRejectedSearchQuery}
+              searchPlaceholder="Search by asset, employee, reason..."
+              totalCount={rejected.length}
+              filteredCount={filteredRejected.length}
+              itemLabel="rejected requisitions"
+            />
 
             <div className="table-container">
               <table className="data-table">
@@ -660,27 +1154,66 @@ export default function ApprovalsPage() {
                     <th>Category</th>
                     <th>Reason Given</th>
                     <th>Status</th>
+                    <th>Rejection Date</th>
                     <th>Requested Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rejected.length === 0 ? (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: "center", padding: "36px 16px", color: "var(--text-muted)" }}>
+                      <td colSpan={7} style={{ textAlign: "center", padding: "36px 16px", color: "var(--text-muted)" }}>
                         No rejected requisitions on record.
                       </td>
                     </tr>
+                  ) : filteredRejected.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: "center", padding: "36px 16px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                          <Calendar size={28} style={{ color: "var(--text-muted)", opacity: 0.6 }} />
+                          <div style={{ fontWeight: 600, color: "var(--text)", fontSize: "14px" }}>
+                            No rejected requisitions match the selected date or search filter.
+                          </div>
+                          <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                            {rejectedStartDate || rejectedEndDate
+                              ? `No records between ${formatDateRangeLabel(rejectedStartDate, rejectedEndDate)}.`
+                              : "Try adjusting your search criteria."}
+                          </div>
+                          <button className="btn btn-sm btn-primary" onClick={handleClearRejected} style={{ marginTop: 4 }}>
+                            Reset Filter
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   ) : (
-                    rejected.map((req) => (
+                    filteredRejected.map((req) => (
                       <tr key={req.id}>
-                        <td style={{ fontWeight: 500 }}>{req.employee_name}</td>
-                        <td>{req.asset_name}</td>
-                        <td className="text-secondary">{req.category ?? "—"}</td>
-                        <td className="text-secondary" style={{ maxWidth: 260, fontSize: "12px" }}>{req.reason ?? "—"}</td>
                         <td>
-                          <span className="badge badge-danger" style={{ fontSize: "11px", padding: "1px 6px" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <span style={{ fontWeight: 600 }}>{req.employee_name}</span>
+                            {req.employee_email && (
+                              <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{req.employee_email}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ fontWeight: 500 }}>{req.asset_name}</td>
+                        <td className="text-secondary">{req.category ?? "—"}</td>
+                        <td className="text-secondary" style={{ maxWidth: 260, fontSize: "12px", lineHeight: 1.4 }}>
+                          {req.reason ?? "—"}
+                        </td>
+                        <td>
+                          <span className="badge badge-danger" style={{ fontSize: "11px", padding: "2px 8px" }}>
                             Rejected
                           </span>
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text)" }}>
+                              {formatDateTime(req.rejection_date || req.request_date)}
+                            </span>
+                            {!req.rejection_date && (
+                              <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>Decision recorded</span>
+                            )}
+                          </div>
                         </td>
                         <td>
                           <DateCell date={req.request_date} />

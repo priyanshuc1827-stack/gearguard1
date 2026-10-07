@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Wrench, CalendarDays, Package, Inbox,
   Monitor, BarChart2, Shield, LogOut, ChevronLeft, ChevronRight, Moon, Sun,
-  AlertTriangle,
+  AlertTriangle, ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { useTheme } from "@/components/ui/theme-provider";
@@ -21,6 +21,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { label: "Command Center", href: "/dashboard",    icon: LayoutDashboard, roles: ["admin", "manager"] },
+  { label: "Audit & Compliance", href: "/compliance", icon: ShieldCheck,   roles: ["admin", "auditor"] },
   { label: "Work Queue",     href: "/work-orders",  icon: Wrench,          roles: ["admin", "manager", "technician", "auditor"] },
   { label: "Complaints",     href: "/complaints",   icon: AlertTriangle,   roles: ["user", "manager", "admin"] },
   { label: "My Equipment",   href: "/my-equipment", icon: Monitor,         roles: ["user"] },

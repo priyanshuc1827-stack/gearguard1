@@ -18,19 +18,33 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...init.headers },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...init.headers },
+    });
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new ApiError(
+      0,
+      `Cannot connect to GearGuard backend at ${BASE}. Please verify that the backend is running on port 3001 and not blocked by another process. (${detail})`
+    );
+  }
+
   if (!res.ok) {
     let detail = res.statusText;
-    try { const b = await res.json(); detail = b.detail ?? detail; } catch {}
+    try {
+      const b = await res.json();
+      detail = b.detail ?? b.error ?? detail;
+    } catch {}
     throw new ApiError(res.status, detail);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
+
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -55,6 +69,8 @@ export interface WorkOrder {
   scheduled_date: string | null; due_date: string | null;
   started_at: string | null; completed_at: string | null;
   downtime_minutes: number | null; duration: number; cost: number | null;
+  audited_by?: string | null; audited_at?: string | null;
+  audit_status?: string | null; audit_notes?: string | null;
   comments: Comment[]; created_at: string; updated_at: string;
 }
 
@@ -68,8 +84,12 @@ export interface WorkOrderFilters {
 export interface Equipment {
   id: string; human_id: string; name: string; serial_number: string; department: string;
   category: string | null; location: string | null; maintenance_team_id: string | null;
-  assigned_employee: string; last_service_date: string | null;
-  is_usable: boolean; open_work_order_count: number; created_at: string;
+  assigned_employee: string; assigned_employee_id?: string | null; last_service_date: string | null;
+  is_usable: boolean;
+  last_audit_date?: string | null;
+  audit_status?: "passed" | "conditional" | "failed" | "uninspected" | string | null;
+  next_audit_due?: string | null;
+  open_work_order_count: number; created_at: string;
 }
 
 export type RequestStatus = "Pending" | "Approved" | "Rejected" | "Allocated" | "Returned";
@@ -79,7 +99,10 @@ export interface AssetRequest {
   allocated_asset_id: string | null; allocated_asset_name: string | null;
   allocated_asset_human_id: string | null; allocated_asset_department?: string | null;
   request_date: string;
-  approval_date: string | null; allocated_date: string | null; return_date: string | null;
+  approval_date: string | null;
+  rejection_date?: string | null;
+  allocated_date: string | null;
+  return_date: string | null;
 }
 
 export interface Team { id: string; name: string; description: string | null; }
@@ -220,4 +243,88 @@ export const locations = {
   create: (b: { name: string; address?: string }) =>
     request<Location>("/locations/", { method: "POST", body: JSON.stringify(b) }),
   delete: (id: string) => request<void>(`/locations/${id}`, { method: "DELETE" }),
+};
+
+// ── Compliance & Auditing ───────────────────────────────────────────────────
+
+export interface ChecklistItem {
+  item: string;
+  passed: boolean;
+  notes?: string | null;
+}
+
+export interface AuditInspection {
+  id: string;
+  human_id: string;
+  certificate_number: string;
+  department: string;
+  equipment_id: string;
+  equipment_name: string;
+  equipment_human_id: string;
+  equipment_serial: string;
+  auditor_id: string;
+  auditor_name: string;
+  auditor_email: string;
+  standard: string;
+  status: "passed" | "conditional" | "failed" | string;
+  score: number;
+  checklist: ChecklistItem[];
+  findings: string;
+  corrective_action_required?: boolean;
+  corrective_action_notes?: string | null;
+  work_order_id?: string | null;
+  work_order_human_id?: string | null;
+  next_audit_due?: string | null;
+  created_at: string;
+}
+
+export interface ComplianceStats {
+  department: string;
+  totalEquipment: number;
+  compliantCount: number;
+  conditionalCount: number;
+  failedCount: number;
+  uninspectedCount: number;
+  complianceRate: number;
+  overdueAudits: number;
+  totalInspections: number;
+  recentInspections: number;
+  activeCapaTickets: number;
+  certifiedWorkOrders: number;
+  flaggedWorkOrders: number;
+  pendingReviewWorkOrders: number;
+}
+
+export interface StandardTemplate {
+  id: string;
+  name: string;
+  category: string;
+  default_items: string[];
+}
+
+export const compliance = {
+  standards: () => request<StandardTemplate[]>("/compliance/standards"),
+  inspections: (opts?: { department?: string; status?: string; search?: string }) => {
+    const p = new URLSearchParams();
+    if (opts?.department && opts.department !== "All") p.set("department", opts.department);
+    if (opts?.status) p.set("status", opts.status);
+    if (opts?.search) p.set("search", opts.search);
+    const qs = p.toString();
+    return request<AuditInspection[]>(`/compliance/inspections${qs ? `?${qs}` : ""}`);
+  },
+  createInspection: (b: {
+    equipment_id: string;
+    standard: string;
+    status: string;
+    score: number;
+    checklist: ChecklistItem[];
+    findings: string;
+    corrective_action_required?: boolean;
+    corrective_action_notes?: string;
+    next_audit_days?: number;
+  }) => request<AuditInspection>("/compliance/inspections", { method: "POST", body: JSON.stringify(b) }),
+  reviewWorkOrder: (wo_id: string, b: { status: "certified" | "flagged"; notes: string }) =>
+    request<WorkOrder>(`/compliance/work-orders/${wo_id}/review`, { method: "POST", body: JSON.stringify(b) }),
+  stats: (dept?: string) =>
+    request<ComplianceStats>(`/compliance/stats${dept && dept !== "All" ? `?department=${encodeURIComponent(dept)}` : ""}`),
 };

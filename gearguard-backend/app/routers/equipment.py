@@ -40,6 +40,9 @@ async def _build_out(asset: Equipment) -> EquipmentOut:
         assigned_employee_id=str(asset.assigned_employee_id) if asset.assigned_employee_id else None,
         last_service_date=asset.last_service_date,
         is_usable=asset.is_usable,
+        last_audit_date=getattr(asset, "last_audit_date", None),
+        audit_status=getattr(asset, "audit_status", "uninspected") or "uninspected",
+        next_audit_due=getattr(asset, "next_audit_due", None),
         open_work_order_count=open_count,
         created_at=asset.created_at,
     )
@@ -72,11 +75,11 @@ async def list_equipment(
             assets = matched
         else:
             assets = []
-    elif current.role == UserRole.manager:
+    elif current.role in (UserRole.manager, UserRole.auditor):
         user = await User.get(PydanticObjectId(current.user_id))
-        mgr_dept = getattr(user, "department", None) if user else None
-        if mgr_dept and mgr_dept != "All":
-            assets = [a for a in assets if a.department == mgr_dept]
+        scoped_dept = getattr(user, "department", None) if user else None
+        if scoped_dept and scoped_dept != "All":
+            assets = [a for a in assets if a.department == scoped_dept]
     elif department and department != "All":
         assets = [a for a in assets if a.department == department]
 
@@ -108,11 +111,11 @@ async def get_equipment(equipment_id: str, current: TokenData = Depends(get_curr
 
         if not is_allocated:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied — this equipment is not allocated to you.")
-    elif current.role == UserRole.manager:
+    elif current.role in (UserRole.manager, UserRole.auditor):
         user = await User.get(PydanticObjectId(current.user_id))
-        mgr_dept = getattr(user, "department", None) if user else None
-        if mgr_dept and mgr_dept != "All" and asset.department != mgr_dept:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied: Asset belongs to another department")
+        scoped_dept = getattr(user, "department", None) if user else None
+        if scoped_dept and scoped_dept != "All" and asset.department != scoped_dept:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"Access denied: Asset belongs to {asset.department}, but your departmental scope is {scoped_dept}")
 
     return await _build_out(asset)
 

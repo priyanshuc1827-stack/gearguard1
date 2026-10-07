@@ -1,6 +1,6 @@
 """app/routers/reports.py — Reports powered by robust queries with Atlas compatibility and department scoping."""
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from collections import defaultdict
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, Query
@@ -13,13 +13,33 @@ from app.models.enums import UserRole
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
+# ── Simple in-process TTL cache ───────────────────────────────────────────────
+# Avoids repeated full-collection MongoDB scans within the same minute.
+_CACHE_TTL = 60  # seconds
+_cache: Dict[str, Tuple[float, Any]] = {}
+
+
+def _cache_get(key: str) -> Any:
+    entry = _cache.get(key)
+    if entry is None:
+        return None
+    ts, value = entry
+    if datetime.now(tz=timezone.utc).timestamp() - ts > _CACHE_TTL:
+        del _cache[key]
+        return None
+    return value
+
+
+def _cache_set(key: str, value: Any) -> None:
+    _cache[key] = (datetime.now(tz=timezone.utc).timestamp(), value)
+
 
 async def _resolve_target_department(current: TokenData, department: Optional[str]) -> Optional[str]:
-    if current.role == UserRole.manager:
+    if current.role in (UserRole.manager, UserRole.auditor):
         current_user = await User.get(PydanticObjectId(current.user_id))
-        mgr_dept = getattr(current_user, "department", None)
-        if mgr_dept and mgr_dept != "All":
-            return mgr_dept
+        scoped_dept = getattr(current_user, "department", None)
+        if scoped_dept and scoped_dept != "All":
+            return scoped_dept
     if department and department != "All":
         return department
     return None
@@ -31,6 +51,10 @@ async def summary(
     current: TokenData = Depends(require("admin", "manager", "auditor")),
 ):
     target_dept = await _resolve_target_department(current, department)
+    cache_key = f"summary:{target_dept or 'all'}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     if target_dept:
         dept_eqs = await Equipment.find(Equipment.department == target_dept).to_list()
@@ -74,7 +98,7 @@ async def summary(
     repaired_count = status_counts["Repaired"]
     repair_rate = round((repaired_count / total_wos * 100), 1) if total_wos > 0 else 0.0
 
-    return {
+    result = {
         "totalWorkOrders": total_wos,
         "openWorkOrders": status_counts["New"] + status_counts["In Progress"],
         "inProgress": status_counts["In Progress"],
@@ -88,6 +112,8 @@ async def summary(
         "repairRate": repair_rate,
         "department": target_dept or "All",
     }
+    _cache_set(cache_key, result)
+    return result
 
 
 @router.get("/high-risk")
@@ -96,6 +122,10 @@ async def high_risk(
     current: TokenData = Depends(require("admin", "manager", "auditor")),
 ):
     target_dept = await _resolve_target_department(current, department)
+    cache_key = f"high-risk:{target_dept or 'all'}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     if target_dept:
         dept_eqs = await Equipment.find(Equipment.department == target_dept).to_list()
@@ -137,6 +167,7 @@ async def high_risk(
             "totalDowntimeMinutes": stats["totalDowntime"],
         })
 
+    _cache_set(cache_key, result)
     return result
 
 
@@ -146,6 +177,10 @@ async def technician_performance(
     current: TokenData = Depends(require("admin", "manager", "auditor")),
 ):
     target_dept = await _resolve_target_department(current, department)
+    cache_key = f"tech-perf:{target_dept or 'all'}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     if target_dept:
         all_techs = await User.find(
@@ -188,6 +223,7 @@ async def technician_performance(
         })
 
     result.sort(key=lambda x: (x["completionRate"], x["completed"]), reverse=True)
+    _cache_set(cache_key, result)
     return result
 
 
@@ -197,6 +233,10 @@ async def downtime_trend(
     current: TokenData = Depends(require("admin", "manager", "auditor")),
 ):
     target_dept = await _resolve_target_department(current, department)
+    cache_key = f"downtime-trend:{target_dept or 'all'}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     if target_dept:
         dept_eqs = await Equipment.find(Equipment.department == target_dept).to_list()
@@ -219,7 +259,7 @@ async def downtime_trend(
             weekly[key]["repaired"] += 1
 
     sorted_keys = sorted(weekly.keys(), reverse=True)[:12]
-    return [
+    result = [
         {
             "year": k[0],
             "week": k[1],
@@ -228,3 +268,5 @@ async def downtime_trend(
         }
         for k in sorted_keys
     ]
+    _cache_set(cache_key, result)
+    return result

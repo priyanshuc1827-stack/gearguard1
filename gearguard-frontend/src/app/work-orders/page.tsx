@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw, Search } from "lucide-react";
-import { workOrders, equipment, users, type WorkOrder, type WOStatus, type WOPriority } from "@/lib/api";
+import { Plus, RefreshCw, Search, ShieldCheck, CheckCircle2, AlertOctagon } from "lucide-react";
+import { workOrders, equipment, users, compliance, type WorkOrder, type WOStatus, type WOPriority } from "@/lib/api";
 import { AppShell } from "@/components/custom/app-shell";
 import { StatusDot, PriorityLabel, HumanId, Age, DateCell, SkeletonRows } from "@/components/custom/display";
 import { useToast } from "@/components/ui/toast";
@@ -30,8 +30,8 @@ export default function WorkQueuePage() {
     }),
   });
 
-  const { data: eqList } = useQuery({ queryKey: ["equipment"], queryFn: equipment.list });
-  const { data: userList } = useQuery({ queryKey: ["users"], queryFn: users.list });
+  const { data: eqList } = useQuery({ queryKey: ["equipment"], queryFn: equipment.list, staleTime: 15 * 60 * 1000 });
+  const { data: userList } = useQuery({ queryKey: ["users"], queryFn: users.list, staleTime: 15 * 60 * 1000 });
   const selected = data?.items.find((w) => w.id === selectedId) ?? null;
 
   const updateMutation = useMutation({
@@ -244,6 +244,11 @@ function WorkOrderInspector({
 
       <div className="divider" />
 
+      {/* Compliance Review Section */}
+      <ComplianceReviewSection wo={wo} />
+
+      <div className="divider" />
+
       {/* Comments */}
       <div>
         <div style={{ fontWeight: 500, fontSize: "var(--text-sm)", marginBottom: "var(--space-2)" }}>Activity</div>
@@ -350,6 +355,98 @@ function NewWorkOrderForm({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+function ComplianceReviewSection({ wo }: { wo: WorkOrder }) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [notes, setNotes] = useState("");
+
+  const reviewMutation = useMutation({
+    mutationFn: (status: "certified" | "flagged") =>
+      compliance.reviewWorkOrder(wo.id, {
+        status,
+        notes: notes || (status === "certified" ? "Post-repair procedures and downtime verified." : "Flagged non-conformance for investigation."),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["work-orders"] });
+      toast("Compliance review saved", "success");
+      setNotes("");
+    },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
+
+  const isCertified = wo.audit_status === "certified";
+  const isFlagged = wo.audit_status === "flagged";
+  const canAudit = user?.role === "auditor" || user?.role === "admin";
+
+  return (
+    <div
+      style={{
+        padding: "10px 12px",
+        borderRadius: "var(--radius-sm)",
+        background: "var(--bg-subtle)",
+        border: "1px solid var(--border)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontWeight: 600, fontSize: "var(--text-xs)", display: "flex", alignItems: "center", gap: 5 }}>
+          <ShieldCheck size={14} style={{ color: "var(--primary)" }} /> Compliance Sign-Off
+        </span>
+        {isCertified ? (
+          <span style={{ color: "var(--green)", fontSize: "var(--text-xs)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+            <CheckCircle2 size={12} /> Certified
+          </span>
+        ) : isFlagged ? (
+          <span style={{ color: "var(--red)", fontSize: "var(--text-xs)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+            <AlertOctagon size={12} /> Flagged
+          </span>
+        ) : (
+          <span style={{ color: "var(--text-muted)", fontSize: "11px" }}>Pending Review</span>
+        )}
+      </div>
+
+      {wo.audited_by && (
+        <div style={{ fontSize: "11px", color: isFlagged ? "var(--red)" : "var(--text-secondary)", lineHeight: 1.4 }}>
+          🛡️ Reviewed by <strong>{wo.audited_by}</strong>: {wo.audit_notes}
+        </div>
+      )}
+
+      {canAudit && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+          <input
+            className="input input-sm"
+            placeholder="Auditor observation note…"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            style={{ fontSize: "11px" }}
+          />
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => reviewMutation.mutate("certified")}
+              disabled={reviewMutation.isPending}
+              style={{ flex: 1, fontSize: "11px", color: "var(--green)" }}
+            >
+              <CheckCircle2 size={12} /> Certify
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => reviewMutation.mutate("flagged")}
+              disabled={reviewMutation.isPending}
+              style={{ flex: 1, fontSize: "11px", color: "var(--red)" }}
+            >
+              <AlertOctagon size={12} /> Flag
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

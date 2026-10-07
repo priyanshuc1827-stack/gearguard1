@@ -7,7 +7,8 @@ import { AppShell } from "@/components/custom/app-shell";
 import { HumanId, DateCell, SkeletonRows } from "@/components/custom/display";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/features/auth/auth-context";
-import { Plus, Search } from "lucide-react";
+import Link from "next/link";
+import { Plus, Search, ShieldCheck, ClipboardCheck } from "lucide-react";
 
 export default function AssetsPage() {
   const { user } = useAuth();
@@ -69,12 +70,13 @@ export default function AssetsPage() {
                     <th>Assigned to</th>
                     <th>Last service</th>
                     <th style={{ width: 80, textAlign: "right" }}>Open WOs</th>
+                    <th>Compliance</th>
                     <th>Serviceable</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? <SkeletonRows cols={10} /> :
-                    filtered.length === 0 ? <tr><td colSpan={10}><div className="empty-state"><p>No assets found.</p></div></td></tr> :
+                  {isLoading ? <SkeletonRows cols={11} /> :
+                    filtered.length === 0 ? <tr><td colSpan={11}><div className="empty-state"><p>No assets found.</p></div></td></tr> :
                     filtered.map((a) => (
                       <tr key={a.id} onClick={() => setSelectedId(a.id === selectedId ? null : a.id)} style={{ cursor: "pointer" }} className={selectedId === a.id ? "selected" : ""}>
                         <td><HumanId id={a.human_id} /></td>
@@ -87,6 +89,17 @@ export default function AssetsPage() {
                         <td><DateCell date={a.last_service_date} /></td>
                         <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                           {a.open_work_order_count > 0 ? <span style={{ color: "var(--amber)", fontWeight: 500 }}>{a.open_work_order_count}</span> : <span className="text-muted">—</span>}
+                        </td>
+                        <td>
+                          {a.audit_status === "passed" ? (
+                            <span className="status status-repaired"><span className="status-dot" aria-hidden />Certified</span>
+                          ) : a.audit_status === "conditional" ? (
+                            <span style={{ color: "var(--amber)", fontSize: "var(--text-xs)", fontWeight: 500 }}>Conditional</span>
+                          ) : a.audit_status === "failed" ? (
+                            <span className="status status-scrap"><span className="status-dot" aria-hidden />Non-Compliant</span>
+                          ) : (
+                            <span className="text-muted" style={{ fontSize: "var(--text-xs)" }}>Uninspected</span>
+                          )}
                         </td>
                         <td>
                           <span className={`status ${a.is_usable ? "status-repaired" : "status-scrap"}`}>
@@ -106,22 +119,55 @@ export default function AssetsPage() {
           </div>
         </div>
 
-        {selected && canEdit && (
+        {selected && (canEdit || user?.role === "auditor") && (
           <div className="inspector">
             <div style={{ padding: "var(--space-4)", display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}><HumanId id={selected.human_id} /><button className="btn btn-ghost btn-sm" onClick={() => setSelectedId(null)}>Close</button></div>
               <div style={{ fontWeight: 500 }}>{selected.name}</div>
               <div className="divider" />
-              <div className="field">
-                <label className="label">Serviceable</label>
-                <select className="input input-sm select" value={String(selected.is_usable)} onChange={(e) => updateMutation.mutate({ id: selected.id, body: { is_usable: e.target.value === "true" } })}>
-                  <option value="true">Yes</option><option value="false">No</option>
-                </select>
+
+              {/* Compliance & Audit Box */}
+              <div style={{ padding: "10px 12px", borderRadius: "var(--radius-sm)", background: "var(--bg-subtle)", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 600, fontSize: "var(--text-xs)", display: "flex", alignItems: "center", gap: 5 }}>
+                    <ShieldCheck size={14} style={{ color: "var(--primary)" }} /> Audit Status
+                  </span>
+                  <span style={{ textTransform: "capitalize", fontWeight: 600, fontSize: "var(--text-xs)", color: selected.audit_status === "passed" ? "var(--green)" : selected.audit_status === "failed" ? "var(--red)" : "inherit" }}>
+                    {selected.audit_status || "Uninspected"}
+                  </span>
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                  Last audit: {selected.last_audit_date ? new Date(selected.last_audit_date).toLocaleDateString("en-IN") : "Never"}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                  Next due: {selected.next_audit_due ? new Date(selected.next_audit_due).toLocaleDateString("en-IN") : "Not scheduled"}
+                </div>
+                {(user?.role === "auditor" || user?.role === "admin") && (
+                  <Link
+                    href="/compliance"
+                    className="btn btn-secondary btn-sm"
+                    style={{ marginTop: 4, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontSize: "11px" }}
+                  >
+                    <ClipboardCheck size={12} /> Open in Audit Portal
+                  </Link>
+                )}
               </div>
-              <div className="field">
-                <label className="label">Assigned employee</label>
-                <input className="input input-sm" defaultValue={selected.assigned_employee} onBlur={(e) => { if (e.target.value !== selected.assigned_employee) updateMutation.mutate({ id: selected.id, body: { assigned_employee: e.target.value } }); }} />
-              </div>
+
+              {canEdit && (
+                <>
+                  <div className="field">
+                    <label className="label">Serviceable</label>
+                    <select className="input input-sm select" value={String(selected.is_usable)} onChange={(e) => updateMutation.mutate({ id: selected.id, body: { is_usable: e.target.value === "true" } })}>
+                      <option value="true">Yes</option><option value="false">No</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="label">Assigned employee</label>
+                    <input className="input input-sm" defaultValue={selected.assigned_employee} onBlur={(e) => { if (e.target.value !== selected.assigned_employee) updateMutation.mutate({ id: selected.id, body: { assigned_employee: e.target.value } }); }} />
+                  </div>
+                </>
+              )}
+
               <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px var(--space-4)", fontSize: "var(--text-sm)" }}>
                 {[["Serial", selected.serial_number], ["Department", selected.department], ["Category", selected.category ?? "—"], ["Location", selected.location ?? "—"], ["Open WOs", String(selected.open_work_order_count)]].map(([k, v]) => (
                   <React.Fragment key={k}><dt style={{ color: "var(--text-muted)" }}>{k}</dt><dd className={k === "Serial" ? "mono" : ""}>{v}</dd></React.Fragment>

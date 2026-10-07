@@ -152,11 +152,25 @@ You can open two different browser profiles or an Incognito window to test end-t
    - Navigate to **Asset Requests / Approvals**.
    - Review the requisition, inspect budget allocation, and click **Approve**.
 
-### Scenario 3: Compliance Audit & Log Review
-1. **Login as Auditor** (`auditor@gearguard.com`):
-   - Navigate to **Audit Logs**.
-   - Inspect immutable timeline entries for technician actions, state changes, asset handovers, and system modifications.
-   - Export or filter logs by date and department.
+### Scenario 3: Real Compliance Audit, Machinery Inspection & Sign-Off Workflow
+1. **Login as Auditor** (e.g. `auditor.production@gearguard.com` for Production, or `auditor@gearguard.com` for Quality Control):
+   - You are automatically routed to the **Audit & Compliance Portal** (`/compliance`).
+   - Notice the **Departmental Scope Lock**: you strictly see records, machinery, work orders, and audit logs belonging to your assigned department!
+2. **Conduct Equipment Compliance Inspection**:
+   - Under **Machinery Compliance**, click **Conduct Audit Inspection** on any machine (e.g. *Cincinnati Press Brake* or *Trumpf TruLaser*).
+   - Select Standard (*OSHA 1910*, *ISO 9001*, *ISO 14001*, or *IEC 17025*).
+   - Complete the interactive safety & calibration checklist.
+   - Choose verdict (*Compliant*, *Conditional*, or *Non-Compliant*).
+   - Submit: issues an official Certificate number (`CERT-2026-PROD-XXXX`), sets machine status, and writes to immutable audit trail.
+   - If non-compliant: automatically dispatches high-priority Corrective Action (CAPA) ticket to the maintenance team!
+3. **Review & Sign-Off Work Orders**:
+   - Open **Maintenance Sign-Off** tab (or open any work order from the Work Queue).
+   - Review technician actions, parts, and downtime.
+   - Click **Review & Certify** to digitally sign off with auditor notes and stamp the ticket!
+4. **View & Print Compliance Certificate**:
+   - Open **Inspection History** tab and click **View Cert** on any completed audit to view or print the official Certificate of Compliance.
+5. **Inspect Department-Scoped Audit Trail**:
+   - Open **Department Audit Trail** tab to view immutable timeline events strictly within your department with SHA-256 verification.
 
 ---
 

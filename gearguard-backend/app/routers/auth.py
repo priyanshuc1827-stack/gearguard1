@@ -67,7 +67,7 @@ async def signup(body: SignupRequest, response: Response):
     user = User(name=body.name.strip(), email=email, password=hash_password(body.password), role=UserRole.user)
     await user.insert()
 
-    token = create_access_token(str(user.id), user.role)
+    token = create_access_token(str(user.id), user.role, getattr(user, "department", "Production"))
     _set_cookie(response, token)
     return _user_out(user)
 
@@ -92,7 +92,7 @@ async def login(request: Request, body: LoginRequest, response: Response):
     elif not verify_password(body.password, user.password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
 
-    token = create_access_token(str(user.id), user.role)
+    token = create_access_token(str(user.id), user.role, getattr(user, "department", "Production"))
     _set_cookie(response, token)
     return _user_out(user)
 

@@ -21,6 +21,9 @@ class Equipment(Document):
     assigned_employee_id: Optional[PydanticObjectId] = None
     last_service_date: Optional[datetime] = None
     is_usable: bool = True
+    last_audit_date: Optional[datetime] = None
+    audit_status: Optional[str] = "uninspected"   # "passed", "conditional", "failed", "uninspected"
+    next_audit_due: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     class Settings:

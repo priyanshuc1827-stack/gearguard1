@@ -45,11 +45,12 @@ def is_plaintext(stored: str) -> bool:
 # JWT helpers
 # ---------------------------------------------------------------------------
 
-def create_access_token(user_id: str, role: str) -> str:
+def create_access_token(user_id: str, role: str, department: Optional[str] = None) -> str:
     cfg = get_settings()
     payload = {
         "sub": user_id,
         "role": role,
+        "department": department,
         "iat": datetime.now(tz=timezone.utc),
         "exp": datetime.now(tz=timezone.utc) + timedelta(hours=cfg.JWT_EXPIRE_HOURS),
     }
@@ -66,11 +67,12 @@ def decode_token(token: str) -> dict:
 # ---------------------------------------------------------------------------
 
 class TokenData:
-    __slots__ = ("user_id", "role")
+    __slots__ = ("user_id", "role", "department")
 
-    def __init__(self, user_id: str, role: str):
+    def __init__(self, user_id: str, role: str, department: Optional[str] = None):
         self.user_id = user_id
         self.role = role
+        self.department = department
 
 
 _UNAUTH = HTTPException(
@@ -91,9 +93,10 @@ async def get_current_user(
         payload = decode_token(token)
         uid = payload.get("sub", "")
         role = payload.get("role", "")
+        dept = payload.get("department")
         if not uid or not role:
             raise _UNAUTH
-        return TokenData(user_id=uid, role=role)
+        return TokenData(user_id=uid, role=role, department=dept)
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired")
     except pyjwt.PyJWTError:

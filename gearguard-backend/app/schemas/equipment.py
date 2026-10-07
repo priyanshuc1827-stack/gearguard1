@@ -24,6 +24,9 @@ class EquipmentUpdate(BaseModel):
     assigned_employee: Optional[str] = None
     assigned_employee_id: Optional[str] = None
     is_usable: Optional[bool] = None
+    last_audit_date: Optional[datetime] = None
+    audit_status: Optional[str] = None
+    next_audit_due: Optional[datetime] = None
 
 
 class EquipmentOut(BaseModel):
@@ -39,5 +42,8 @@ class EquipmentOut(BaseModel):
     assigned_employee_id: Optional[str] = None
     last_service_date: Optional[datetime] = None
     is_usable: bool
+    last_audit_date: Optional[datetime] = None
+    audit_status: Optional[str] = "uninspected"
+    next_audit_due: Optional[datetime] = None
     open_work_order_count: int = 0
     created_at: datetime

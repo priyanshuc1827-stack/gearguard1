@@ -40,6 +40,12 @@ class WorkOrder(Document):
 
     cost: Optional[float] = None
 
+    # Auditor Compliance & Sign-off fields
+    audited_by: Optional[str] = None
+    audited_at: Optional[datetime] = None
+    audit_status: Optional[str] = None     # "certified", "flagged"
+    audit_notes: Optional[str] = None
+
     comments: List[Comment] = Field(default_factory=list)
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))

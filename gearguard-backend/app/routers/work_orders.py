@@ -30,6 +30,12 @@ router = APIRouter(prefix="/work-orders", tags=["work-orders"])
 OPEN_STATUSES = [WorkOrderStatus.new.value, WorkOrderStatus.in_progress.value]
 
 
+def _as_utc(dt: datetime) -> datetime:
+    """Attach UTC tzinfo to a naive datetime (MongoDB returns naive UTC datetimes)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def _get_wo(wo_id: str) -> WorkOrder:
@@ -105,6 +111,10 @@ async def _build_out(wo: WorkOrder) -> WorkOrderOut:
         downtime_minutes=wo.downtime_minutes,
         duration=wo.duration,
         cost=wo.cost,
+        audited_by=getattr(wo, "audited_by", None),
+        audited_at=getattr(wo, "audited_at", None),
+        audit_status=getattr(wo, "audit_status", None),
+        audit_notes=getattr(wo, "audit_notes", None),
         comments=[
             CommentOut(
                 author_id=str(c.author_id),
@@ -138,13 +148,13 @@ async def list_work_orders(
 ):
     query: dict = {}
 
-    # Department Scoping for Managers and optional filtering for Admin/Auditors
+    # Department Scoping for Managers and Auditors
     target_dept = department if (department and department != "All") else None
-    if current.role == UserRole.manager:
+    if current.role in (UserRole.manager, UserRole.auditor):
         current_user = await User.get(PydanticObjectId(current.user_id))
-        mgr_dept = getattr(current_user, "department", None)
-        if mgr_dept and mgr_dept != "All":
-            target_dept = mgr_dept
+        scoped_dept = getattr(current_user, "department", None)
+        if scoped_dept and scoped_dept != "All":
+            target_dept = scoped_dept
 
     if target_dept:
         dept_eqs = await Equipment.find(Equipment.department == target_dept).to_list()
@@ -353,7 +363,9 @@ async def update_work_order(
         if body.status == WorkOrderStatus.repaired:
             wo.completed_at = now
             if wo.started_at:
-                wo.downtime_minutes = int((now - wo.started_at).total_seconds() / 60)
+                # MongoDB stores naive datetimes; normalise before subtraction
+                started_utc = _as_utc(wo.started_at)
+                wo.downtime_minutes = int((now - started_utc).total_seconds() / 60)
             # BR2: update equipment last service date
             if wo.equipment_id:
                 asset = await Equipment.get(wo.equipment_id)

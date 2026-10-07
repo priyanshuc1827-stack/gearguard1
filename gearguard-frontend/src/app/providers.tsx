@@ -9,8 +9,10 @@ import { ToastProvider } from "@/components/ui/toast";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
-      retry: 1,
+      staleTime:            5 * 60 * 1000,  // 5 min — data stays fresh across navigations
+      gcTime:               10 * 60 * 1000, // 10 min — keep cache after unmount
+      retry:                1,
+      refetchOnWindowFocus: false,          // ERP: no need to refetch on alt-tab
     },
   },
 });

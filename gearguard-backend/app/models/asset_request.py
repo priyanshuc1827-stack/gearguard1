@@ -16,6 +16,7 @@ class AssetRequest(Document):
     allocated_asset_id: Optional[PydanticObjectId] = None
     request_date: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
     approval_date: Optional[datetime] = None
+    rejection_date: Optional[datetime] = None
     allocated_date: Optional[datetime] = None
     return_date: Optional[datetime] = None
 

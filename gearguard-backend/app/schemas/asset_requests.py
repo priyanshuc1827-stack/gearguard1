@@ -30,5 +30,6 @@ class AssetRequestOut(BaseModel):
     allocated_asset_department: Optional[str] = None
     request_date: datetime
     approval_date: Optional[datetime] = None
+    rejection_date: Optional[datetime] = None
     allocated_date: Optional[datetime] = None
     return_date: Optional[datetime] = None

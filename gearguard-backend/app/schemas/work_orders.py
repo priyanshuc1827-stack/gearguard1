@@ -66,6 +66,10 @@ class WorkOrderOut(BaseModel):
     downtime_minutes: Optional[int] = None
     duration: float
     cost: Optional[float] = None
+    audited_by: Optional[str] = None
+    audited_at: Optional[datetime] = None
+    audit_status: Optional[str] = None
+    audit_notes: Optional[str] = None
     comments: List[CommentOut] = []
     created_at: datetime
     updated_at: datetime
